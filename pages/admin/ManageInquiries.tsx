@@ -1,435 +1,551 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo, useRef } from "react";
 import { db } from "../../services/db";
 import { Inquiry, InquiryStatus } from "../../types";
+import * as XLSX from "xlsx";
 import {
-  Mail,
-  Phone,
-  User,
-  Building,
-  MessageSquare,
-  Clock,
-  Filter,
-  CheckCircle,
-  AlertCircle,
-  Inbox,
-  ChevronLeft,
   Download,
   Trash2,
+  Inbox,
+  Calendar,
+  X,
+  Phone,
+  Package,
+  MapPin,
+  MessageSquare,
+  Clock,
+  CheckCircle2,
+  AlertCircle,
 } from "lucide-react";
+import {
+  Button,
+  IconButton,
+  Badge,
+  INQUIRY_STATUS_TONE,
+  INQUIRY_STATUS_LABEL,
+  Card,
+  StatCard,
+  DataTable,
+  Input,
+  Select,
+  SearchInput,
+  Modal,
+  PageHeader,
+  EmptyState,
+  SkeletonStat,
+  useToast,
+  useConfirm,
+} from "../../components/ui";
+import type { Column } from "../../components/ui";
 
 export const ManageInquiries: React.FC = () => {
   const [inquiries, setInquiries] = useState<Inquiry[]>([]);
+  const [loading, setLoading] = useState(true);
   const [selected, setSelected] = useState<Inquiry | null>(null);
-  const [filter, setFilter] = useState<InquiryStatus | "ALL">("NEW");
+  const [filter, setFilter] = useState<InquiryStatus | "ALL">("ALL");
+  const [searchQuery, setSearchQuery] = useState("");
+  const [searchType, setSearchType] = useState<
+    "all" | "name" | "product" | "phone"
+  >("all");
+  const [dateFilter, setDateFilter] = useState("");
+  const [sortBy, setSortBy] = useState<"newest" | "oldest" | "name">("newest");
+
+  const toast = useToast();
+  const confirm = useConfirm();
+
+  // While the delete confirm dialog is open, both it and the detail Modal
+  // listen for Escape at the document level — so Escape (meant to cancel the
+  // confirm) would also close the detail modal underneath. This flag lets the
+  // detail modal's onClose no-op for the duration of the confirm.
+  const confirmOpenRef = useRef(false);
 
   useEffect(() => {
-    db.getInquiries().then((data) => {
-      const sorted = [...data].sort(
-        (a, b) =>
-          new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
-      );
-      setInquiries(sorted);
-    });
+    loadInquiries();
   }, []);
+
+  const loadInquiries = async () => {
+    setLoading(true);
+    try {
+      const data = await db.getInquiries();
+      setInquiries(data);
+    } catch (error) {
+      console.error("Failed to load inquiries:", error);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const updateStatus = async (id: string, status: InquiryStatus) => {
     await db.updateInquiryStatus(id, status);
     const updated = await db.getInquiries();
-    const sorted = [...updated].sort(
-      (a, b) =>
-        new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
-    );
-    setInquiries(sorted);
+    setInquiries(updated);
     if (selected?.id === id) {
-      const s = sorted.find((x) => x.id === id);
+      const s = updated.find((x) => x.id === id);
       if (s) setSelected(s);
     }
+    toast.info("Status updated");
   };
 
   const handleDelete = async (id: string) => {
-    if (
-      window.confirm(
-        "Are you sure you want to delete this inquiry? This action cannot be undone."
-      )
-    ) {
-      await db.deleteInquiry(id);
-      const updated = await db.getInquiries();
-      const sorted = [...updated].sort(
-        (a, b) =>
-          new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+    confirmOpenRef.current = true;
+    let ok: boolean;
+    try {
+      ok = await confirm({
+        title: "Delete this inquiry?",
+        message: "This will permanently remove the record. This action cannot be undone.",
+        confirmLabel: "Delete",
+        tone: "danger",
+      });
+    } finally {
+      confirmOpenRef.current = false;
+    }
+    if (!ok) return;
+    await db.deleteInquiry(id);
+    const updated = await db.getInquiries();
+    setInquiries(updated);
+    if (selected?.id === id) setSelected(null);
+    toast.success("Inquiry deleted");
+  };
+
+  const downloadAsExcel = () => {
+    if (filteredInquiries.length === 0) {
+      toast.warning("Nothing to export");
+      return;
+    }
+
+    const data = filteredInquiries.map((inq) => ({
+      Date: new Date(inq.createdAt).toLocaleDateString(),
+      "User Name": inq.customerName,
+      "Phone Number": inq.phone,
+      City: inq.city || "",
+      State: inq.state || "",
+      "Product Name": inq.productName || "General",
+      Description: inq.message,
+      Status: inq.status,
+    }));
+
+    const worksheet = XLSX.utils.json_to_sheet(data);
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, "Inquiries");
+
+    // Auto-size columns
+    const maxWidths = Object.keys(data[0] || {}).map((key) => {
+      const len = Math.max(
+        key.length,
+        ...data.map((row: any) => (row[key] ? row[key].toString().length : 0))
       );
-      setInquiries(sorted);
-      setSelected(null); // Deselect the inquiry after deletion
-    }
-  };
+      return { wch: len + 2 };
+    });
+    worksheet["!cols"] = maxWidths;
 
-  const downloadAsCSV = () => {
-    if (filteredInquiries.length === 0) return;
-
-    const headers = [
-      "ID",
-      "Date",
-      "Customer Name",
-      "Email",
-      "Phone",
-      "Company",
-      "Product",
-      "Status",
-      "Message",
-    ];
-
-    const csvContent = [
-      headers.join(","),
-      ...filteredInquiries.map((inq) =>
-        [
-          inq.id,
-          new Date(inq.createdAt).toLocaleString(),
-          `"${inq.customerName.replace(/"/g, '""')}"`,
-          inq.email,
-          `"${inq.phone}"`,
-          `"${(inq.company || "N/A").replace(/"/g, '""')}"`,
-          `"${(inq.productName || "General").replace(/"/g, '""')}"`,
-          inq.status,
-          `"${inq.message.replace(/"/g, '""').replace(/\n/g, " ")}"`,
-        ].join(",")
-      ),
-    ].join("\n");
-
-    const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement("a");
-    link.setAttribute("href", url);
-    link.setAttribute(
-      "download",
-      `inquiries_${filter.toLowerCase()}_${
-        new Date().toISOString().split("T")[0]
-      }.csv`
+    XLSX.writeFile(
+      workbook,
+      `Inquiries_${new Date().toISOString().split("T")[0]}.xlsx`
     );
-    link.style.visibility = "hidden";
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
+    toast.success("Export downloaded");
   };
 
-  const filteredInquiries = inquiries.filter(
-    (i) => filter === "ALL" || i.status === filter
-  );
+  const filteredInquiries = useMemo(() => {
+    let result = inquiries.filter((i) => {
+      const matchesFilter = filter === "ALL" || i.status === filter;
+      const searchLower = searchQuery.trim().toLowerCase();
+      let matchesSearch = true;
+      if (searchLower) {
+        if (searchType === "name") {
+          matchesSearch = i.customerName.toLowerCase().includes(searchLower);
+        } else if (searchType === "product") {
+          matchesSearch = (i.productName || "General")
+            .toLowerCase()
+            .includes(searchLower);
+        } else if (searchType === "phone") {
+          matchesSearch = i.phone.toLowerCase().includes(searchLower);
+        } else {
+          matchesSearch =
+            i.customerName.toLowerCase().includes(searchLower) ||
+            (i.productName || "").toLowerCase().includes(searchLower) ||
+            i.phone.toLowerCase().includes(searchLower) ||
+            (i.city || "").toLowerCase().includes(searchLower) ||
+            (i.state || "").toLowerCase().includes(searchLower);
+        }
+      }
 
-  const getStatusStyle = (status: InquiryStatus) => {
-    switch (status) {
-      case "NEW":
-        return "bg-orange-100 text-orange-600 border-orange-200";
-      case "CONTACTED":
-        return "bg-blue-100 text-blue-600 border-blue-200";
-      case "CLOSED":
-        return "bg-green-100 text-green-600 border-green-200";
-    }
+      const matchesDate = !dateFilter || i.createdAt.includes(dateFilter);
+
+      return matchesFilter && matchesSearch && matchesDate;
+    });
+
+    result.sort((a, b) => {
+      if (sortBy === "newest")
+        return (
+          new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+        );
+      if (sortBy === "oldest")
+        return (
+          new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
+        );
+      if (sortBy === "name")
+        return a.customerName.localeCompare(b.customerName);
+      return 0;
+    });
+
+    return result;
+  }, [inquiries, filter, searchQuery, searchType, dateFilter, sortBy]);
+
+  const stats = useMemo(() => {
+    return {
+      total: inquiries.length,
+      new: inquiries.filter((i) => i.status === "NEW").length,
+      contacted: inquiries.filter((i) => i.status === "CONTACTED").length,
+      closed: inquiries.filter((i) => i.status === "CLOSED").length,
+    };
+  }, [inquiries]);
+
+  const clearFilters = () => {
+    setSearchQuery("");
+    setFilter("ALL");
+    setDateFilter("");
   };
+
+  const columns: Column<Inquiry>[] = [
+    {
+      key: "date",
+      header: "Date",
+      className: "whitespace-nowrap",
+      render: (inq) => (
+        <div>
+          <div className="text-xs font-bold text-slate-600 dark:text-slate-300">
+            {new Date(inq.createdAt).toLocaleDateString()}
+          </div>
+          <div className="font-mono text-[9px] text-slate-400 dark:text-slate-500">
+            {new Date(inq.createdAt).toLocaleTimeString([], {
+              hour: "2-digit",
+              minute: "2-digit",
+            })}
+          </div>
+        </div>
+      ),
+    },
+    {
+      key: "customer",
+      header: "Customer",
+      render: (inq) => (
+        <div>
+          <div className="text-sm font-bold text-slate-900 dark:text-white">
+            {inq.customerName}
+          </div>
+          <div className="text-[10px] font-medium text-slate-500 dark:text-slate-400">
+            {inq.phone}
+          </div>
+        </div>
+      ),
+    },
+    {
+      key: "location",
+      header: "Location",
+      render: (inq) =>
+        inq.city || inq.state ? (
+          <div className="flex items-center gap-1.5 text-xs">
+            <MapPin className="h-3.5 w-3.5 shrink-0 text-slate-400" />
+            <div className="min-w-0">
+              <div className="font-bold text-slate-700 dark:text-slate-300">
+                {inq.city || "—"}
+              </div>
+              <div className="text-[10px] text-slate-400 dark:text-slate-500">
+                {inq.state || ""}
+              </div>
+            </div>
+          </div>
+        ) : (
+          <span className="text-xs text-slate-300 dark:text-slate-600">—</span>
+        ),
+    },
+    {
+      key: "product",
+      header: "Product",
+      render: (inq) => (
+        <Badge tone="slate">{inq.productName || "General"}</Badge>
+      ),
+    },
+    {
+      key: "message",
+      header: "Message",
+      render: (inq) => (
+        <div
+          className="max-w-[200px] cursor-help truncate text-xs text-slate-500 dark:text-slate-400"
+          title={inq.message}
+        >
+          {inq.message}
+        </div>
+      ),
+    },
+    {
+      key: "status",
+      header: "Status",
+      align: "center",
+      render: (inq) => (
+        <Badge tone={INQUIRY_STATUS_TONE[inq.status]}>
+          {INQUIRY_STATUS_LABEL[inq.status]}
+        </Badge>
+      ),
+    },
+    {
+      key: "actions",
+      header: "Actions",
+      align: "right",
+      className: "whitespace-nowrap",
+      render: (inq) => (
+        <IconButton
+          icon={Trash2}
+          label="Delete inquiry"
+          variant="danger"
+          onClick={(e) => {
+            e.stopPropagation();
+            handleDelete(inq.id);
+          }}
+        />
+      ),
+    },
+  ];
 
   return (
-    <div className="space-y-6 md:space-y-8 animate-in fade-in duration-500 h-full flex flex-col">
-      <div className="flex flex-col md:flex-row md:justify-between md:items-end space-y-4 md:space-y-0 shrink-0">
-        <div>
-          <h1 className="text-2xl md:text-3xl font-black text-slate-900">
-            Lead Intelligence
-          </h1>
-          <p className="text-slate-500 mt-1 text-sm">
-            Enterprise requests awaiting technical consultation.
-          </p>
-        </div>
+    <div className="space-y-4 md:space-y-5 animate-in fade-in duration-500 pb-12">
+      <PageHeader
+        title="Inquiry Management"
+        subtitle="View and manage customer inquiries and leads."
+        actions={
+          <Button variant="dark" leftIcon={Download} onClick={downloadAsExcel}>
+            Export to Excel
+          </Button>
+        }
+      />
 
-        <div className="flex items-center space-x-3 overflow-x-auto max-w-full no-scrollbar pb-1">
-          <div className="flex items-center space-x-1 bg-white p-1 rounded-2xl border border-slate-100 shadow-sm">
-            {(["ALL", "NEW", "CONTACTED", "CLOSED"] as const).map((f) => (
-              <button
-                key={f}
-                onClick={() => {
-                  setFilter(f);
-                  if (window.innerWidth < 1024) setSelected(null);
-                }}
-                className={`px-3 py-2 rounded-xl text-[9px] md:text-[10px] font-black uppercase tracking-wider transition-all whitespace-nowrap ${
-                  filter === f
-                    ? "bg-slate-900 text-white shadow-md"
-                    : "text-slate-400 hover:text-slate-900"
-                }`}
-              >
-                {f}
-              </button>
-            ))}
-          </div>
+      <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
+        {loading ? (
+          <>
+            <SkeletonStat />
+            <SkeletonStat />
+            <SkeletonStat />
+            <SkeletonStat />
+          </>
+        ) : (
+          <>
+            <StatCard label="Total" value={stats.total} icon={Inbox} tone="slate" />
+            <StatCard label="New" value={stats.new} icon={AlertCircle} tone="amber" />
+            <StatCard label="Contacted" value={stats.contacted} icon={Clock} tone="blue" />
+            <StatCard label="Archived" value={stats.closed} icon={CheckCircle2} tone="green" />
+          </>
+        )}
+      </div>
 
-          <button
-            onClick={downloadAsCSV}
-            className="flex items-center space-x-2 bg-blue-600 text-white px-4 py-2.5 rounded-2xl text-[10px] font-black uppercase tracking-widest hover:bg-blue-700 transition-all shadow-lg shadow-blue-500/20 active:scale-95 whitespace-nowrap"
+      <Card padding="sm" className="grid grid-cols-1 gap-3 md:grid-cols-4">
+        <div className="flex gap-2">
+          <SearchInput
+            value={searchQuery}
+            onChange={setSearchQuery}
+            placeholder={`Search ${searchType === "all" ? "leads" : searchType}...`}
+            className="min-w-0 flex-grow"
+          />
+          <Select
+            dense
+            value={searchType}
+            onChange={(e) =>
+              setSearchType(
+                e.target.value as "all" | "name" | "product" | "phone"
+              )
+            }
+            containerClassName="w-28 shrink-0"
+            aria-label="Search field"
           >
-            <Download className="h-3.5 w-3.5" />
-            <span className="hidden sm:inline">Export</span>
-          </button>
+            <option value="all">All</option>
+            <option value="name">Name</option>
+            <option value="product">Product</option>
+            <option value="phone">Phone</option>
+          </Select>
         </div>
-      </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 flex-grow overflow-hidden">
-        {/* List View - Hidden on mobile if a lead is selected */}
-        <div
-          className={`lg:col-span-5 xl:col-span-4 space-y-4 overflow-y-auto pr-2 custom-scrollbar ${
-            selected ? "hidden lg:block" : "block"
-          }`}
+        <Input
+          dense
+          type="date"
+          icon={Calendar}
+          value={dateFilter}
+          onChange={(e) => setDateFilter(e.target.value)}
+          aria-label="Filter by date"
+        />
+
+        <Select
+          dense
+          value={filter}
+          onChange={(e) => setFilter(e.target.value as InquiryStatus | "ALL")}
+          aria-label="Filter by status"
         >
-          {filteredInquiries.map((inq) => (
-            <button
-              key={inq.id}
-              onClick={() => setSelected(inq)}
-              className={`w-full text-left p-5 md:p-6 rounded-3xl transition-all border-2 relative overflow-hidden ${
-                selected?.id === inq.id
-                  ? "bg-white border-blue-600 shadow-xl shadow-blue-500/5 -translate-y-1"
-                  : "bg-white border-transparent hover:border-slate-200 shadow-sm"
-              }`}
-            >
-              <div className="flex justify-between items-start mb-3 pr-8">
-                <div className="space-y-1">
-                  <div className="font-black text-slate-900 text-sm md:text-base">
-                    {inq.customerName}
-                  </div>
-                  <div className="text-[9px] md:text-[10px] text-slate-400 font-bold uppercase tracking-widest">
-                    {inq.company || "Private Contractor"}
+          <option value="ALL">All Status</option>
+          <option value="NEW">New</option>
+          <option value="CONTACTED">Contacted</option>
+          <option value="CLOSED">Archived</option>
+        </Select>
+
+        <Select
+          dense
+          value={sortBy}
+          onChange={(e) =>
+            setSortBy(e.target.value as "newest" | "oldest" | "name")
+          }
+          aria-label="Sort order"
+        >
+          <option value="newest">Newest First</option>
+          <option value="oldest">Oldest First</option>
+          <option value="name">Name A-Z</option>
+        </Select>
+      </Card>
+
+      <DataTable<Inquiry>
+        columns={columns}
+        rows={filteredInquiries}
+        rowKey={(inq) => inq.id}
+        onRowClick={setSelected}
+        loading={loading}
+        minWidth="900px"
+        empty={
+          <EmptyState
+            icon={Inbox}
+            title="No leads found"
+            message="Try adjusting your filters or search terms to find what you're looking for."
+            action={
+              <Button variant="ghost" onClick={clearFilters}>
+                Clear all filters
+              </Button>
+            }
+          />
+        }
+      />
+
+      {/* Detail modal */}
+      <Modal
+        open={!!selected}
+        onClose={() => {
+          // Ignore Escape/backdrop-close while the delete confirm is on top,
+          // so cancelling the confirm keeps the detail view open.
+          if (confirmOpenRef.current) return;
+          setSelected(null);
+        }}
+        size="lg"
+        animation="slide"
+      >
+        {selected && (
+          <>
+            {/* Flush header (custom, replaces ModalHeader) */}
+            <div className="flex shrink-0 items-center justify-between gap-4 border-b border-slate-100 px-5 py-4 md:px-6 dark:border-slate-800">
+              <div className="flex min-w-0 items-center gap-3">
+                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-blue-600 text-base font-black text-white">
+                  {selected.customerName[0]}
+                </div>
+                <div className="min-w-0">
+                  <h2 className="truncate text-base font-black text-slate-900 md:text-lg dark:text-white">
+                    {selected.customerName}
+                  </h2>
+                  <div className="mt-0.5 truncate font-mono text-[10px] uppercase tracking-widest text-slate-400 dark:text-slate-500">
+                    ID: {selected.id}
                   </div>
                 </div>
-                <span
-                  className={`px-2 py-0.5 rounded-lg text-[8px] font-black border uppercase tracking-tighter ${getStatusStyle(
-                    inq.status
-                  )}`}
-                >
-                  {inq.status}
-                </span>
               </div>
-              <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  handleDelete(inq.id);
-                }}
-                className="absolute top-4 right-4 p-2 text-slate-300 hover:text-red-600 hover:bg-red-50 rounded-xl transition-all"
-                title="Delete Inquiry"
+              <IconButton
+                icon={X}
+                label="Close"
+                variant="ghost"
+                size="md"
+                onClick={() => setSelected(null)}
+              />
+            </div>
+
+            <div className="custom-scrollbar flex-grow space-y-5 overflow-y-auto p-5 md:space-y-6 md:p-6">
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                <Card padding="md">
+                  <div className="mb-1 flex items-center text-[10px] font-black uppercase tracking-widest text-slate-400 dark:text-slate-500">
+                    <Calendar className="mr-1.5 h-3 w-3" /> Date Recorded
+                  </div>
+                  <div className="font-bold text-slate-900 dark:text-white">
+                    {new Date(selected.createdAt).toLocaleDateString()}
+                  </div>
+                  <div className="text-[10px] text-slate-500 dark:text-slate-400">
+                    {new Date(selected.createdAt).toLocaleTimeString()}
+                  </div>
+                </Card>
+                <Card padding="md">
+                  <div className="mb-1 flex items-center text-[10px] font-black uppercase tracking-widest text-slate-400 dark:text-slate-500">
+                    <Phone className="mr-1.5 h-3 w-3" /> Phone
+                  </div>
+                  <a
+                    href={`tel:${selected.phone}`}
+                    className="font-black text-blue-600 hover:underline dark:text-blue-400"
+                  >
+                    {selected.phone}
+                  </a>
+                </Card>
+                <Card padding="md" className="sm:col-span-2">
+                  <div className="mb-1 flex items-center text-[10px] font-black uppercase tracking-widest text-slate-400 dark:text-slate-500">
+                    <MapPin className="mr-1.5 h-3 w-3" /> Location
+                  </div>
+                  <div className="font-bold text-slate-900 dark:text-white">
+                    {[selected.city, selected.state]
+                      .filter(Boolean)
+                      .join(", ") || "Not provided"}
+                  </div>
+                </Card>
+              </div>
+
+              <div className="space-y-4">
+                <div className="flex items-center px-1 text-[10px] font-black uppercase tracking-widest text-slate-400 dark:text-slate-500">
+                  <Package className="mr-1.5 h-3 w-3" /> Inquired Product
+                </div>
+                <div className="rounded-2xl bg-blue-600 p-5 font-black text-white shadow-lg shadow-blue-500/20 dark:shadow-blue-950/40">
+                  {selected.productName || "General"}
+                </div>
+              </div>
+
+              <div className="space-y-4">
+                <div className="flex items-center px-1 text-[10px] font-black uppercase tracking-widest text-slate-400 dark:text-slate-500">
+                  <MessageSquare className="mr-1.5 h-3 w-3" /> Message
+                </div>
+                <div className="min-h-[120px] whitespace-pre-line rounded-2xl border border-slate-100 bg-slate-50 p-5 font-medium italic leading-relaxed text-slate-700 md:p-6 dark:border-slate-800 dark:bg-slate-800/50 dark:text-slate-300">
+                  "{selected.message}"
+                </div>
+              </div>
+            </div>
+
+            {/* Footer bar */}
+            <div className="flex shrink-0 flex-col gap-4 border-t border-slate-100 px-5 py-4 sm:flex-row sm:items-center sm:justify-between md:px-6 dark:border-slate-800">
+              <Select
+                dense
+                value={selected.status}
+                onChange={(e) =>
+                  updateStatus(selected.id, e.target.value as InquiryStatus)
+                }
+                containerClassName="w-full sm:w-44"
+                aria-label="Inquiry status"
               >
-                <Trash2 className="h-4 w-4" />
-              </button>
-              <div className="flex items-center text-[9px] md:text-[10px] font-bold text-slate-500 space-x-3">
-                <span className="flex items-center whitespace-nowrap">
-                  <Clock className="h-3 w-3 mr-1 text-slate-300" />{" "}
-                  {new Date(inq.createdAt).toLocaleDateString()}
-                </span>
-                <span className="flex items-center truncate">
-                  <Inbox className="h-3 w-3 mr-1 text-slate-300" />{" "}
-                  {inq.productName || "General"}
-                </span>
-              </div>
-            </button>
-          ))}
-          {filteredInquiries.length === 0 && (
-            <div className="bg-slate-50 border-2 border-dashed border-slate-200 rounded-3xl p-12 text-center">
-              <Inbox className="h-10 w-10 text-slate-200 mx-auto mb-4" />
-              <p className="text-slate-400 text-sm font-medium">
-                No leads in this queue.
-              </p>
-            </div>
-          )}
-        </div>
-
-        {/* Detail View - Full screen on mobile if a lead is selected */}
-        <div
-          className={`lg:col-span-7 xl:col-span-8 flex flex-col h-full ${
-            !selected ? "hidden lg:flex" : "flex"
-          }`}
-        >
-          {selected ? (
-            <div className="bg-white rounded-[2rem] md:rounded-[2.5rem] border border-slate-100 shadow-xl overflow-hidden animate-in fade-in slide-in-from-right-4 duration-500 flex flex-col h-full">
-              <div className="p-6 md:p-10 bg-slate-900 text-white shrink-0">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center space-x-4">
-                    <button
-                      onClick={() => setSelected(null)}
-                      className="lg:hidden p-2 bg-white/10 rounded-lg hover:bg-white/20"
-                    >
-                      <ChevronLeft className="h-5 w-5" />
-                    </button>
-                    <div>
-                      <h2 className="text-xl md:text-2xl font-black">
-                        Lead Diagnostic
-                      </h2>
-                      <div className="hidden md:flex items-center mt-2 text-slate-400 space-x-3">
-                        <span className="text-[10px] font-mono tracking-widest uppercase">
-                          TXN ID: {selected.id}
-                        </span>
-                        <span className="w-1 h-1 bg-slate-700 rounded-full"></span>
-                        <span className="text-[10px] font-bold uppercase tracking-widest">
-                          {new Date(selected.createdAt).toLocaleString()}
-                        </span>
-                      </div>
-                    </div>
-                  </div>
-                  <div className="bg-white/10 p-2 md:p-4 rounded-xl md:rounded-2xl flex items-center space-x-2 md:space-x-4">
-                    <span className="hidden sm:inline text-[9px] md:text-[10px] font-black uppercase tracking-widest text-blue-400">
-                      Pipeline Status:
-                    </span>
-                    <select
-                      value={selected.status}
-                      onChange={(e) =>
-                        updateStatus(
-                          selected.id,
-                          e.target.value as InquiryStatus
-                        )
-                      }
-                      className="bg-slate-800 border border-slate-700 px-2 md:px-4 py-1.5 md:py-2 rounded-lg md:rounded-xl text-[9px] md:text-[10px] font-black outline-none focus:ring-2 focus:ring-blue-500 text-white"
-                    >
-                      <option value="NEW">NEW</option>
-                      <option value="CONTACTED">CONTACTED</option>
-                      <option value="CLOSED">CLOSED</option>
-                    </select>
-                  </div>
-                </div>
-              </div>
-
-              <div className="p-6 md:p-10 grid grid-cols-1 md:grid-cols-2 gap-8 md:gap-10 overflow-y-auto flex-grow custom-scrollbar">
-                <div className="space-y-6 md:space-y-8">
-                  <div>
-                    <label className="text-[10px] font-black uppercase text-slate-400 tracking-widest block mb-4">
-                      Contact Information
-                    </label>
-                    <div className="space-y-4 md:space-y-5">
-                      <div className="flex items-center space-x-4 group">
-                        <div className="bg-slate-50 p-3 md:p-4 rounded-xl md:rounded-2xl border border-slate-100 group-hover:bg-blue-50 transition-colors">
-                          <User className="h-5 w-5 text-blue-600" />
-                        </div>
-                        <div>
-                          <div className="text-[9px] text-slate-400 font-black uppercase">
-                            Decision Maker
-                          </div>
-                          <div className="font-black text-slate-900 text-sm md:text-base">
-                            {selected.customerName}
-                          </div>
-                        </div>
-                      </div>
-                      <div className="flex items-center space-x-4 group">
-                        <div className="bg-slate-50 p-3 md:p-4 rounded-xl md:rounded-2xl border border-slate-100 group-hover:bg-blue-50 transition-colors">
-                          <Building className="h-5 w-5 text-blue-600" />
-                        </div>
-                        <div>
-                          <div className="text-[9px] text-slate-400 font-black uppercase">
-                            Organization
-                          </div>
-                          <div className="font-black text-slate-900 text-sm md:text-base">
-                            {selected.company || "Enterprise Private"}
-                          </div>
-                        </div>
-                      </div>
-                      <div className="flex items-center space-x-4 group">
-                        <div className="bg-slate-50 p-3 md:p-4 rounded-xl md:rounded-2xl border border-slate-100 group-hover:bg-blue-50 transition-colors">
-                          <Mail className="h-5 w-5 text-blue-600" />
-                        </div>
-                        <div className="min-w-0">
-                          <div className="text-[9px] text-slate-400 font-black uppercase">
-                            Verified Email
-                          </div>
-                          <a
-                            href={`mailto:${selected.email}`}
-                            className="font-black text-slate-900 hover:text-blue-600 transition-colors truncate block text-sm md:text-base"
-                          >
-                            {selected.email}
-                          </a>
-                        </div>
-                      </div>
-                      <div className="flex items-center space-x-4 group">
-                        <div className="bg-slate-50 p-3 md:p-4 rounded-xl md:rounded-2xl border border-slate-100 group-hover:bg-blue-50 transition-colors">
-                          <Phone className="h-5 w-5 text-blue-600" />
-                        </div>
-                        <div>
-                          <div className="text-[9px] text-slate-400 font-black uppercase">
-                            Phone Matrix
-                          </div>
-                          <a
-                            href={`tel:${selected.phone}`}
-                            className="font-black text-slate-900 hover:text-blue-600 transition-colors text-sm md:text-base"
-                          >
-                            {selected.phone}
-                          </a>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-
-                <div className="flex flex-col h-full">
-                  <label className="text-[10px] font-black uppercase text-slate-400 tracking-widest block mb-4">
-                    Requirement Brief
-                  </label>
-                  <div className="bg-slate-50 rounded-2xl md:rounded-[2rem] p-6 md:p-8 border border-slate-100 flex-grow relative overflow-hidden min-h-[150px]">
-                    <div className="absolute top-0 right-0 p-4 opacity-10 md:opacity-100">
-                      <MessageSquare className="h-6 w-6 md:h-8 md:w-8 text-slate-200" />
-                    </div>
-                    <p className="text-slate-700 text-sm leading-relaxed whitespace-pre-line font-medium italic relative z-10">
-                      "{selected.message}"
-                    </p>
-                  </div>
-                  <div className="mt-6 md:mt-8 p-4 md:p-6 bg-blue-50 rounded-xl md:rounded-2xl border border-blue-100 flex justify-between items-center shrink-0">
-                    <div className="min-w-0 pr-4">
-                      <div className="text-[9px] md:text-[10px] text-blue-400 font-black uppercase">
-                        Inquiry Target
-                      </div>
-                      <div className="text-blue-700 font-black text-xs md:text-sm truncate">
-                        {selected.productName || "Normal Inquiry"}
-                      </div>
-                    </div>
-                    <AlertCircle className="h-5 w-5 md:h-6 md:w-6 text-blue-400 shrink-0" />
-                  </div>
-                </div>
-              </div>
-
-              <div className="p-6 md:p-10 border-t border-slate-50 flex justify-between items-center shrink-0">
-                <div className="hidden sm:flex items-center space-x-2">
-                  <CheckCircle
-                    className={`h-5 w-5 ${
-                      selected.status === "CLOSED"
-                        ? "text-green-500"
-                        : "text-slate-200"
-                    }`}
-                  />
-                  <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
-                    Workflow Verified
-                  </span>
-                </div>
-                <button
-                  onClick={() => updateStatus(selected.id, "CLOSED")}
-                  disabled={selected.status === "CLOSED"}
-                  className="w-full sm:w-auto px-6 md:px-8 py-3 bg-slate-100 text-slate-600 font-black rounded-xl hover:bg-green-600 hover:text-white transition-all disabled:opacity-50 disabled:cursor-not-allowed text-xs uppercase tracking-widest"
-                >
-                  Archive Request
-                </button>
-                <button
+                <option value="NEW">New</option>
+                <option value="CONTACTED">Contacted</option>
+                <option value="CLOSED">Archived</option>
+              </Select>
+              <div className="flex w-full items-center gap-3 sm:w-auto">
+                <IconButton
+                  icon={Trash2}
+                  label="Delete inquiry"
+                  variant="danger"
+                  size="lg"
                   onClick={() => handleDelete(selected.id)}
-                  className="p-3 bg-red-50 text-red-600 rounded-xl hover:bg-red-600 hover:text-white transition-all shadow-sm active:scale-95 ml-2"
-                  title="Delete Lead"
+                />
+                <Button
+                  variant="dark"
+                  className="flex-grow sm:flex-grow-0"
+                  onClick={() => setSelected(null)}
                 >
-                  <Trash2 className="h-5 w-5" />
-                </button>
+                  Close
+                </Button>
               </div>
             </div>
-          ) : (
-            <div className="h-full min-h-[400px] bg-white border border-slate-100 border-dashed rounded-[2.5rem] flex items-center justify-center text-center p-12 md:p-20 shadow-sm transition-colors">
-              <div className="max-w-xs">
-                <div className="bg-slate-50 w-20 md:w-24 h-20 md:h-24 rounded-full flex items-center justify-center mx-auto mb-8">
-                  <Mail className="h-8 w-8 md:h-10 md:w-10 text-slate-200" />
-                </div>
-                <h3 className="text-lg md:text-xl font-black text-slate-900 mb-2">
-                  Select a Lead
-                </h3>
-                <p className="text-slate-400 text-xs md:text-sm">
-                  Select an enterprise inquiry from the list to view diagnostic
-                  details and technical requirements.
-                </p>
-              </div>
-            </div>
-          )}
-        </div>
-      </div>
+          </>
+        )}
+      </Modal>
     </div>
   );
 };

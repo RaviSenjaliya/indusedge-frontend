@@ -19,6 +19,18 @@ export interface Category {
   icon: string;
 }
 
+export interface Project {
+  id: string;
+  title: string;
+  category: string;
+  location: string;
+  year: string;
+  images: string[];
+  description: string;
+  isFeatured: boolean;
+  isActive: boolean;
+}
+
 export type InquiryStatus = "NEW" | "CONTACTED" | "CLOSED";
 
 export interface Inquiry {
@@ -26,9 +38,9 @@ export interface Inquiry {
   productId?: string;
   productName?: string;
   customerName: string;
-  email: string;
   phone: string;
-  company: string;
+  state: string;
+  city: string;
   message: string;
   status: InquiryStatus;
   createdAt: string;
@@ -37,9 +49,9 @@ export interface Inquiry {
 export interface InquiryFormData {
   name: string;
   phone: string;
+  state: string;
+  city: string;
   message: string;
-  email?: string;
-  company?: string;
   productId?: string;
   productName?: string;
 }

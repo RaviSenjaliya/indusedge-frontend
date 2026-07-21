@@ -6,21 +6,21 @@ import { MapPin, Phone, Mail, Clock, Globe } from 'lucide-react';
 export const Contact: React.FC = () => {
   return (
     <div className="bg-slate-50 min-h-screen">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-16">
-        <div className="text-center mb-16">
-          <h1 className="text-4xl font-extrabold text-slate-900 mb-4">Request a Quote</h1>
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
+        <div className="text-center mb-8">
+          <h1 className="text-2xl font-extrabold text-slate-900 mb-4">Request a Quote</h1>
           <p className="text-slate-600 max-w-2xl mx-auto">
             Our technical sales engineers are ready to assist you with component specifications, bulk pricing, and custom supply chain solutions.
           </p>
         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-12">
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           {/* Contact Details */}
-          <div className="lg:col-span-1 space-y-6">
-            <div className="bg-white p-8 rounded-2xl shadow-sm border border-slate-200">
-              <h3 className="text-xl font-bold text-slate-900 mb-8">Corporate Headquarters</h3>
-              
-              <div className="space-y-6">
+          <div className="lg:col-span-1 space-y-4">
+            <div className="bg-white p-5 rounded-2xl shadow-sm border border-slate-200">
+              <h3 className="text-xl font-bold text-slate-900 mb-6">Corporate Headquarters</h3>
+
+              <div className="space-y-4">
                 <div className="flex items-start space-x-4">
                   <div className="bg-blue-50 p-3 rounded-lg">
                     <MapPin className="h-6 w-6 text-blue-600" />
@@ -82,8 +82,8 @@ export const Contact: React.FC = () => {
 
           {/* Form */}
           <div className="lg:col-span-2">
-            <div className="bg-white p-8 sm:p-12 rounded-2xl shadow-md border border-slate-200">
-              <h3 className="text-2xl font-bold text-slate-900 mb-8">Send us an Inquiry</h3>
+            <div className="bg-white p-5 sm:p-6 rounded-2xl shadow-md border border-slate-200">
+              <h3 className="text-2xl font-bold text-slate-900 mb-6">Send us an Inquiry</h3>
               <InquiryForm />
             </div>
           </div>

@@ -7,16 +7,13 @@ import {
   Mail,
   MapPin,
   Factory,
-  Lock,
+  Clock,
   Search,
   Cpu,
   Layers,
   ArrowRight,
-  Bell,
-  BellOff,
 } from "lucide-react";
 import { db } from "../services/db";
-import { pushService } from "../services/pushService";
 import { Product, Category } from "../types";
 
 export const Header: React.FC = () => {
@@ -34,8 +31,6 @@ export const Header: React.FC = () => {
     categories: Category[];
   } | null>(null);
 
-  const [notifPermission, setNotifPermission] =
-    useState<NotificationPermission>("default");
   const searchRef = useRef<HTMLDivElement>(null);
 
   const location = useLocation();
@@ -44,29 +39,9 @@ export const Header: React.FC = () => {
   const navLinks = [
     { name: "Home", path: "/" },
     { name: "Products", path: "/products" },
+    { name: "Projects", path: "/projects" },
     { name: "Inquiry", path: "/inquiry" },
   ];
-
-  useEffect(() => {
-    pushService.checkPermission().then(setNotifPermission);
-  }, []);
-
-  const handleTogglePush = async () => {
-    if (notifPermission === "default") {
-      const granted = await pushService.requestPermission();
-      setNotifPermission(granted ? "granted" : "denied");
-      if (granted) {
-        pushService.sendLocalNotification(
-          "Notifications Enabled",
-          "You will now receive updates from Palak Aluminium."
-        );
-      }
-    } else if (notifPermission === "denied") {
-      alert(
-        "Please enable notifications in your browser settings to receive updates."
-      );
-    }
-  };
 
   // 1. Debounce the search query
   useEffect(() => {
@@ -151,13 +126,13 @@ export const Header: React.FC = () => {
   return (
     <header className="bg-white shadow-sm sticky top-0 z-50 transition-all duration-300">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="flex justify-between items-center h-16 md:h-20">
+        <div className="flex justify-between items-center h-14 md:h-16">
           <div className="flex items-center shrink-0">
             <Link to="/" className="flex items-center space-x-2">
               <div className="bg-blue-600 p-1.5 md:p-2 rounded-lg">
-                <Factory className="h-5 w-5 md:h-6 md:w-6 text-white" />
+                <Factory className="h-5 w-5 text-white" />
               </div>
-              <span className="text-lg md:text-2xl font-black bg-clip-text text-transparent bg-gradient-to-r from-blue-700 to-blue-500 tracking-tighter truncate max-w-[150px] sm:max-w-none">
+              <span className="text-base md:text-xl font-black bg-clip-text text-transparent bg-gradient-to-r from-blue-700 to-blue-500 tracking-tighter truncate max-w-[150px] sm:max-w-none">
                 PALAK<span className="text-slate-900">ALUMINIUM</span>
               </span>
             </Link>
@@ -179,7 +154,7 @@ export const Header: React.FC = () => {
                   setShowSearch(true);
                 }}
                 onFocus={() => setShowSearch(true)}
-                className="w-full bg-slate-50 border border-slate-100 rounded-xl pl-12 pr-4 py-2.5 text-xs font-bold text-slate-900 focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 transition-all outline-none"
+                className="w-full bg-slate-50 border border-slate-100 rounded-lg pl-12 pr-4 py-2.5 text-xs font-bold text-slate-900 focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 transition-all outline-none"
               />
             </div>
             {showSearch && searchQuery.length >= 2 && (
@@ -191,7 +166,7 @@ export const Header: React.FC = () => {
                       onClick={() =>
                         handleResultClick(`/products?category=${cat.id}`)
                       }
-                      className="w-full flex items-center space-x-3 p-3 hover:bg-slate-50 rounded-xl group text-left"
+                      className="w-full flex items-center space-x-3 p-3 hover:bg-slate-50 rounded-lg group text-left"
                     >
                       <Layers className="h-4 w-4 text-blue-600" />
                       <span className="text-xs font-bold uppercase">
@@ -203,7 +178,7 @@ export const Header: React.FC = () => {
                     <button
                       key={prod.id}
                       onClick={() => handleResultClick(`/product/${prod.id}`)}
-                      className="w-full flex items-center space-x-3 p-3 hover:bg-slate-50 rounded-xl group text-left"
+                      className="w-full flex items-center space-x-3 p-3 hover:bg-slate-50 rounded-lg group text-left"
                     >
                       <Cpu className="h-4 w-4 text-slate-400" />
                       <span className="text-xs font-bold uppercase truncate">
@@ -231,32 +206,9 @@ export const Header: React.FC = () => {
               </Link>
             ))}
 
-            <div className="flex items-center space-x-2 border-l border-slate-100 pl-6 ml-2">
-              <button
-                onClick={handleTogglePush}
-                className={`p-2.5 rounded-xl transition-all border ${
-                  notifPermission === "granted"
-                    ? "bg-blue-50 border-blue-100 text-blue-600"
-                    : "bg-slate-50 border-slate-100 text-slate-400"
-                }`}
-                title="Toggle Notifications"
-              >
-                {notifPermission === "granted" ? (
-                  <Bell className="h-4 w-4" />
-                ) : (
-                  <BellOff className="h-4 w-4" />
-                )}
-              </button>
-            </div>
           </nav>
 
           <div className="flex items-center md:hidden space-x-2">
-            <button
-              onClick={handleTogglePush}
-              className="p-2.5 bg-slate-100 rounded-lg text-slate-400"
-            >
-              <Bell className="h-5 w-5" />
-            </button>
             <button
               onClick={() => setIsOpen(!isOpen)}
               className="p-2 text-slate-600"
@@ -286,7 +238,7 @@ export const Header: React.FC = () => {
                   setSearchQuery(e.target.value);
                   setShowSearch(true);
                 }}
-                className="w-full bg-slate-50 border border-slate-100 rounded-xl pl-12 pr-4 py-3 text-xs font-bold text-slate-900 focus:ring-4 focus:ring-blue-500/10 outline-none"
+                className="w-full bg-slate-50 border border-slate-100 rounded-lg pl-12 pr-4 py-3 text-xs font-bold text-slate-900 focus:ring-4 focus:ring-blue-500/10 outline-none"
               />
               {showSearch && searchQuery.length >= 2 && (
                 <div className="absolute top-full mt-2 w-full bg-white border border-slate-100 shadow-xl rounded-xl z-50 overflow-hidden">
@@ -350,21 +302,13 @@ export const Header: React.FC = () => {
             </div>
 
             {/* Additional Info */}
-            <div className="pt-6 border-t border-slate-100 flex items-center justify-between px-4">
+            <div className="pt-6 border-t border-slate-100 flex items-center px-4">
               <div className="flex items-center space-x-3">
                 <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
                 <span className="text-[9px] font-black uppercase tracking-widest text-slate-500">
                   Available Now
                 </span>
               </div>
-              <button
-                onClick={handleTogglePush}
-                className="text-[9px] font-black uppercase tracking-widest text-blue-600"
-              >
-                {notifPermission === "granted"
-                  ? "Notifications On"
-                  : "Enable Alerts"}
-              </button>
             </div>
           </div>
         </div>
@@ -373,73 +317,146 @@ export const Header: React.FC = () => {
   );
 };
 
+const FOOTER_ADDRESS = [
+  "Plot 422, Industrial Zone G,",
+  "Vadodara, Gujarat 390010, India",
+];
+
+const MAPS_URL =
+  "https://www.google.com/maps/search/?api=1&query=" +
+  encodeURIComponent(
+    "Palak Aluminium, Plot 422, Industrial Zone G, Vadodara, Gujarat 390010, India"
+  );
+
+const FOOTER_LINKS = [
+  { name: "Home", path: "/" },
+  { name: "Products", path: "/products" },
+  { name: "Projects", path: "/projects" },
+  { name: "Categories", path: "/categories" },
+  { name: "Inquiry Hub", path: "/inquiry" },
+];
+
 export const Footer: React.FC = () => {
   return (
     <footer className="bg-slate-900 text-slate-300 transition-colors duration-300">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12 text-center md:text-left">
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-12">
-          <div className="col-span-1 md:col-span-1">
-            <div className="flex items-center justify-center md:justify-start space-x-2 mb-6">
-              <Factory className="h-6 w-6 text-blue-400" />
-              <span className="text-xl font-bold text-white uppercase tracking-tight">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12 md:py-14 text-center md:text-left">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-12 gap-10 lg:gap-8">
+          {/* Brand */}
+          <div className="sm:col-span-2 lg:col-span-4">
+            <div className="flex items-center justify-center md:justify-start space-x-2.5 mb-5">
+              <div className="bg-blue-600 p-2 rounded-lg shadow-lg shadow-blue-600/20">
+                <Factory className="h-4 w-4 text-white" />
+              </div>
+              <span className="text-lg font-black text-white uppercase tracking-tight">
                 PALAK ALUMINIUM
               </span>
             </div>
-            <p className="text-xs font-medium leading-relaxed max-w-xs mx-auto md:mx-0">
+            <p className="text-xs font-medium leading-relaxed max-w-xs mx-auto md:mx-0 text-slate-400">
               Premium aluminium products supplier since 2010. Quality you can
               trust.
             </p>
+            <div className="mt-6 inline-flex items-center space-x-2.5 bg-slate-800/60 border border-slate-800 px-4 py-2 rounded-full">
+              <span className="w-1.5 h-1.5 bg-green-500 rounded-full animate-pulse"></span>
+              <span className="text-[9px] font-black uppercase tracking-widest text-slate-400">
+                Available Now
+              </span>
+            </div>
           </div>
-          <div>
-            <h3 className="text-white text-[10px] font-black uppercase tracking-[0.2em] mb-8">
+
+          {/* Navigation */}
+          <div className="lg:col-span-2">
+            <h3 className="text-white text-[10px] font-black uppercase tracking-[0.2em] mb-5">
               Navigation
             </h3>
-            <ul className="space-y-4 text-xs font-bold uppercase tracking-widest">
-              <li>
-                <Link to="/products" className="hover:text-blue-400">
-                  Products
-                </Link>
-              </li>
-              <li>
-                <Link to="/inquiry" className="hover:text-blue-400">
-                  Inquiry Hub
-                </Link>
-              </li>
+            <ul className="space-y-3.5 text-xs font-bold uppercase tracking-widest">
+              {FOOTER_LINKS.map((link) => (
+                <li key={link.path}>
+                  <Link
+                    to={link.path}
+                    className="text-slate-400 hover:text-blue-400 transition-colors"
+                  >
+                    {link.name}
+                  </Link>
+                </li>
+              ))}
             </ul>
           </div>
-          <div>
-            <h3 className="text-white text-[10px] font-black uppercase tracking-[0.2em] mb-8">
-              Resources
-            </h3>
-            <ul className="space-y-4 text-xs font-bold uppercase tracking-widest">
-              <li>
-                <Link
-                  to="/admin/login"
-                  className="flex items-center justify-center md:justify-start hover:text-blue-400"
-                >
-                  <Lock className="h-3 w-3 mr-2" /> CMS Access
-                </Link>
-              </li>
-            </ul>
-          </div>
-          <div>
-            <h3 className="text-white text-[10px] font-black uppercase tracking-[0.2em] mb-8">
+
+          {/* Contact */}
+          <div className="lg:col-span-3">
+            <h3 className="text-white text-[10px] font-black uppercase tracking-[0.2em] mb-5">
               Contact
             </h3>
             <ul className="space-y-4 text-xs font-bold">
-              <li className="flex items-center justify-center md:justify-start space-x-3">
-                <Phone className="h-4 w-4 text-blue-400" />{" "}
-                <span>+91 99999 99999</span>
+              <li>
+                <a
+                  href="tel:+919999999999"
+                  className="flex items-center justify-center md:justify-start space-x-3 hover:text-blue-400 transition-colors"
+                >
+                  <span className="bg-slate-800/80 p-2 rounded-lg shrink-0">
+                    <Phone className="h-3.5 w-3.5 text-blue-400" />
+                  </span>
+                  <span>+91 99999 99999</span>
+                </a>
+              </li>
+              <li>
+                <a
+                  href="mailto:info@palakaluminium.com"
+                  className="flex items-center justify-center md:justify-start space-x-3 hover:text-blue-400 transition-colors"
+                >
+                  <span className="bg-slate-800/80 p-2 rounded-lg shrink-0">
+                    <Mail className="h-3.5 w-3.5 text-blue-400" />
+                  </span>
+                  <span>info@palakaluminium.com</span>
+                </a>
               </li>
               <li className="flex items-center justify-center md:justify-start space-x-3">
-                <Mail className="h-4 w-4 text-blue-400" />{" "}
-                <span>info@palakaluminium.com</span>
+                <span className="bg-slate-800/80 p-2 rounded-lg shrink-0">
+                  <Clock className="h-3.5 w-3.5 text-blue-400" />
+                </span>
+                <span className="text-slate-400">
+                  Mon – Sat · 9:00 AM – 7:00 PM
+                </span>
               </li>
             </ul>
           </div>
+
+          {/* Location */}
+          <div className="lg:col-span-3">
+            <h3 className="text-white text-[10px] font-black uppercase tracking-[0.2em] mb-5">
+              Visit Us
+            </h3>
+            <div className="flex items-start justify-center md:justify-start space-x-3">
+              <span className="bg-slate-800/80 p-2 rounded-lg shrink-0 mt-0.5">
+                <MapPin className="h-3.5 w-3.5 text-blue-400" />
+              </span>
+              <address className="not-italic text-xs font-bold leading-relaxed text-slate-300">
+                {FOOTER_ADDRESS.map((line) => (
+                  <span key={line} className="block">
+                    {line}
+                  </span>
+                ))}
+              </address>
+            </div>
+            <a
+              href={MAPS_URL}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="mt-5 inline-flex items-center space-x-2 bg-blue-600 hover:bg-blue-500 text-white px-5 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all shadow-lg shadow-blue-600/20 active:scale-95"
+            >
+              <span>Get Directions</span>
+              <ArrowRight className="h-3.5 w-3.5" />
+            </a>
+          </div>
         </div>
-        <div className="border-t border-slate-800 mt-12 pt-8 text-[10px] font-black uppercase tracking-[0.2em] text-slate-500">
-          <p>© 2026 Palak Aluminium. All Rights Reserved.</p>
+
+        {/* Bottom bar */}
+        <div className="border-t border-slate-800 mt-10 pt-6 flex flex-col md:flex-row items-center justify-between gap-3 text-[10px] font-black uppercase tracking-[0.2em] text-slate-500">
+          <p>© {new Date().getFullYear()} Palak Aluminium. All Rights Reserved.</p>
+          <p className="flex items-center gap-2">
+            <MapPin className="h-3 w-3 text-blue-500" />
+            <span>Vadodara · Gujarat · India</span>
+          </p>
         </div>
       </div>
     </footer>

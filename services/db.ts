@@ -1,13 +1,14 @@
-import { Product, Category, Inquiry, InquiryStatus } from "../types";
+import { Product, Category, Inquiry, InquiryStatus, Project } from "../types";
 import { PRODUCTS, CATEGORIES } from "../constants";
+import { PROJECTS } from "../data/projects";
 
-const API_BASE_URL = "http://localhost:5001/api";
+const API_BASE_URL = "/api";
 const STORAGE_KEYS = {
   PRODUCTS: "indusedge_products_v1",
   CATEGORIES: "indusedge_categories_v1",
   INQUIRIES: "indusedge_inquiries_v1",
-  NOTIFICATIONS: "indusedge_notif_history",
   IMAGES: "indusedge_images_v1",
+  PROJECTS: "indusedge_projects_v1",
   TOKEN: "indusedge_token",
 };
 
@@ -26,6 +27,9 @@ const initLocalStore = () => {
   }
   if (!localStorage.getItem(STORAGE_KEYS.IMAGES)) {
     localStorage.setItem(STORAGE_KEYS.IMAGES, JSON.stringify([]));
+  }
+  if (!localStorage.getItem(STORAGE_KEYS.PROJECTS)) {
+    localStorage.setItem(STORAGE_KEYS.PROJECTS, JSON.stringify(PROJECTS));
   }
 };
 
@@ -75,10 +79,10 @@ const getLocalCategories = (): Category[] =>
   JSON.parse(localStorage.getItem(STORAGE_KEYS.CATEGORIES) || "[]");
 const getLocalInquiries = (): Inquiry[] =>
   JSON.parse(localStorage.getItem(STORAGE_KEYS.INQUIRIES) || "[]");
-const getLocalNotifications = (): any[] =>
-  JSON.parse(localStorage.getItem(STORAGE_KEYS.NOTIFICATIONS) || "[]");
 const getLocalImages = (): any[] =>
   JSON.parse(localStorage.getItem(STORAGE_KEYS.IMAGES) || "[]");
+const getLocalProjects = (): Project[] =>
+  JSON.parse(localStorage.getItem(STORAGE_KEYS.PROJECTS) || "[]");
 
 export const db = {
   // --- Connection Check ---
@@ -206,10 +210,10 @@ export const db = {
     const newInquiry: Inquiry = {
       id: "inq_" + Math.random().toString(36).substr(2, 9),
       customerName: formData.name,
-      email: formData.email || "not-provided@example.com",
       phone: formData.phone,
-      company: formData.company || "Private Buyer",
-      message: formData.message || "No specific requirements provided.",
+      state: formData.state,
+      city: formData.city,
+      message: formData.message || "",
       productId: formData.productId,
       productName: formData.productName,
       status: "NEW",
@@ -227,7 +231,7 @@ export const db = {
     );
 
     const inqs = getLocalInquiries();
-    inqs.push(newInquiry);
+    inqs.push(result);
     localStorage.setItem(STORAGE_KEYS.INQUIRIES, JSON.stringify(inqs));
     return result;
   },
@@ -260,58 +264,6 @@ export const db = {
     );
     const inqs = getLocalInquiries().filter((i) => i.id !== id);
     localStorage.setItem(STORAGE_KEYS.INQUIRIES, JSON.stringify(inqs));
-  },
-
-  // --- Notifications ---
-  getNotifications: async (): Promise<any[]> => {
-    return fetchWithFallback(
-      "/notifications",
-      { method: "GET" },
-      getLocalNotifications,
-      (data) => {
-        localStorage.setItem(STORAGE_KEYS.NOTIFICATIONS, JSON.stringify(data));
-      }
-    );
-  },
-
-  broadcastNotification: async (
-    title: string,
-    body: string,
-    iconUrl?: string
-  ) => {
-    const payload = { title, body, icon: iconUrl };
-    const result = await fetchWithFallback(
-      "/notifications",
-      {
-        method: "POST",
-        body: JSON.stringify(payload),
-      },
-      () => ({
-        ...payload,
-        id: "local_" + Date.now(),
-        sentAt: new Date().toISOString(),
-      }),
-      () => {}
-    );
-
-    const history = getLocalNotifications();
-    history.unshift(result);
-    localStorage.setItem(
-      STORAGE_KEYS.NOTIFICATIONS,
-      JSON.stringify(history.slice(0, 10))
-    );
-    return result;
-  },
-
-  deleteNotification: async (id: string) => {
-    await fetchWithFallback(
-      `/notifications/${id}`,
-      { method: "DELETE" },
-      () => null,
-      () => {}
-    );
-    const history = getLocalNotifications().filter((n) => n.id !== id);
-    localStorage.setItem(STORAGE_KEYS.NOTIFICATIONS, JSON.stringify(history));
   },
 
   // --- Media ---
@@ -382,6 +334,48 @@ export const db = {
       imgs[idx].categoryId = categoryId;
       localStorage.setItem(STORAGE_KEYS.IMAGES, JSON.stringify(imgs));
     }
+  },
+
+  // --- Projects ---
+  getProjects: async (): Promise<Project[]> => {
+    return fetchWithFallback(
+      "/projects",
+      { method: "GET" },
+      getLocalProjects,
+      (data) => {
+        localStorage.setItem(STORAGE_KEYS.PROJECTS, JSON.stringify(data));
+      }
+    );
+  },
+
+  saveProject: async (project: Project) => {
+    const result = await fetchWithFallback(
+      "/projects",
+      {
+        method: "POST",
+        body: JSON.stringify(project),
+      },
+      () => project,
+      () => {}
+    );
+
+    const projs = getLocalProjects();
+    const idx = projs.findIndex((p) => p.id === project.id);
+    if (idx > -1) projs[idx] = project;
+    else projs.unshift(project);
+    localStorage.setItem(STORAGE_KEYS.PROJECTS, JSON.stringify(projs));
+    return result;
+  },
+
+  deleteProject: async (id: string) => {
+    await fetchWithFallback(
+      `/projects/${id}`,
+      { method: "DELETE" },
+      () => null,
+      () => {}
+    );
+    const projs = getLocalProjects().filter((p) => p.id !== id);
+    localStorage.setItem(STORAGE_KEYS.PROJECTS, JSON.stringify(projs));
   },
 
   // --- Auth ---

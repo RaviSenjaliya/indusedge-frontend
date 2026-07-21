@@ -1,72 +1,108 @@
 import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { db } from "../../services/db";
-import { Lock, Factory, AlertCircle, Eye, EyeOff } from "lucide-react";
+import {
+  Lock,
+  Factory,
+  AlertCircle,
+  Eye,
+  EyeOff,
+  User,
+  ShieldCheck,
+} from "lucide-react";
+import { Button, Input, FieldLabel } from "../../components/ui";
 
 export const Login: React.FC = () => {
   const [user, setUser] = useState("");
   const [pass, setPass] = useState("");
   const [showPass, setShowPass] = useState(false);
   const [error, setError] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
   const navigate = useNavigate();
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
-    const success = await db.login(user, pass);
-    if (success) {
-      navigate("/admin/dashboard");
-    } else {
-      setError(true);
+    setIsLoading(true);
+    try {
+      const success = await db.login(user, pass);
+      if (success) {
+        navigate("/admin/dashboard");
+      } else {
+        setError(true);
+      }
+    } finally {
+      setIsLoading(false);
     }
   };
 
   return (
-    <div className="min-h-screen bg-slate-50 flex items-center justify-center p-4">
-      <div className="bg-white w-full max-w-md rounded-3xl shadow-xl overflow-hidden border border-slate-100">
-        <div className="bg-blue-600 p-10 text-center text-white">
-          <Factory className="h-12 w-12 mx-auto mb-4" />
-          <h1 className="text-2xl font-black uppercase tracking-wider">
-            CMS ACCESS
-          </h1>
-          <p className="text-blue-200 text-sm mt-2">
-            Manage your aluminium product catalog
-          </p>
+    <div className="flex min-h-screen items-center justify-center bg-slate-50 p-4 dark:bg-slate-950">
+      <div className="w-full max-w-md overflow-hidden rounded-2xl border border-slate-100 bg-white shadow-2xl animate-in fade-in slide-in-from-bottom-8 duration-500 dark:border-slate-800 dark:bg-slate-900">
+        {/* Dark header panel — mirrors the GlowPanel look, squared to the card */}
+        <div className="relative overflow-hidden bg-slate-900 p-5 text-center text-white dark:border-b dark:border-slate-800">
+          <div className="absolute right-0 top-0 -mr-16 -mt-16 h-32 w-32 rounded-full bg-blue-600/20 blur-3xl" />
+          <div className="relative z-10">
+            <div className="mx-auto mb-5 flex h-10 w-10 items-center justify-center rounded-2xl bg-blue-600 shadow-lg shadow-blue-600/30">
+              <Factory className="h-5 w-5 text-white" />
+            </div>
+            <h1 className="text-2xl font-black uppercase tracking-wider">
+              CMS Access
+            </h1>
+            <p className="mt-2 text-sm text-slate-400">
+              Manage your aluminium product catalog
+            </p>
+            <span className="mt-5 inline-flex items-center gap-1.5 rounded-lg border border-slate-700 bg-slate-800/80 px-3 py-1.5 text-[9px] font-black uppercase tracking-widest text-slate-300">
+              <ShieldCheck className="h-3 w-3" />
+              Authorized Personnel Only
+            </span>
+          </div>
         </div>
-        <form onSubmit={handleLogin} className="p-10 space-y-6">
+
+        <form onSubmit={handleLogin} className="space-y-6 p-5 md:p-6">
           {error && (
-            <div className="bg-red-50 text-red-600 p-4 rounded-xl flex items-center text-sm font-medium border border-red-100">
-              <AlertCircle className="h-4 w-4 mr-2" /> Invalid credentials
+            <div className="flex items-center gap-2 rounded-lg border border-red-100 bg-red-50 p-4 text-sm font-medium text-red-600 animate-in fade-in duration-300 dark:border-red-900 dark:bg-red-950/40 dark:text-red-400">
+              <AlertCircle className="h-4 w-4 shrink-0" />
+              Invalid credentials. Please try again.
             </div>
           )}
-          <div>
-            <label className="block text-xs font-bold text-slate-400 uppercase mb-2">
-              Username
-            </label>
-            <input
-              required
-              value={user}
-              onChange={(e) => setUser(e.target.value)}
-              className="w-full px-5 py-3 bg-slate-50 border border-slate-100 rounded-xl outline-none focus:ring-2 focus:ring-blue-500 transition-all text-slate-900"
-              placeholder="admin"
-            />
-          </div>
-          <div>
-            <label className="block text-xs font-bold text-slate-400 uppercase mb-2">
+
+          <Input
+            label="Username"
+            icon={User}
+            required
+            autoComplete="username"
+            value={user}
+            onChange={(e) => {
+              setUser(e.target.value);
+              if (error) setError(false);
+            }}
+            placeholder="Enter username"
+          />
+
+          <div className="space-y-2.5">
+            <FieldLabel htmlFor="login-password" required>
               Password
-            </label>
+            </FieldLabel>
             <div className="relative">
-              <input
+              <Input
+                id="login-password"
+                icon={Lock}
                 required
                 type={showPass ? "text" : "password"}
+                autoComplete="current-password"
                 value={pass}
-                onChange={(e) => setPass(e.target.value)}
-                className="w-full px-5 py-3 bg-slate-50 border border-slate-100 rounded-xl outline-none focus:ring-2 focus:ring-blue-500 transition-all text-slate-900 pr-12"
+                onChange={(e) => {
+                  setPass(e.target.value);
+                  if (error) setError(false);
+                }}
                 placeholder="••••••••"
+                className="!pr-12 md:!pr-14"
               />
               <button
                 type="button"
-                onClick={() => setShowPass(!showPass)}
-                className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 transition-colors p-1"
+                onClick={() => setShowPass((v) => !v)}
+                aria-label={showPass ? "Hide password" : "Show password"}
+                className="absolute right-4 top-1/2 -translate-y-1/2 rounded-lg p-1 text-slate-400 transition-colors hover:text-slate-600 focus:outline-none focus-visible:ring-4 focus-visible:ring-blue-500/20 dark:hover:text-slate-200"
               >
                 {showPass ? (
                   <EyeOff className="h-5 w-5" />
@@ -76,15 +112,17 @@ export const Login: React.FC = () => {
               </button>
             </div>
           </div>
-          <button
+
+          <Button
             type="submit"
-            className="w-full bg-slate-900 text-white font-bold py-4 rounded-xl flex items-center justify-center hover:bg-black transition-all"
+            variant="dark"
+            size="lg"
+            fullWidth
+            leftIcon={Lock}
+            loading={isLoading}
           >
-            <Lock className="h-4 w-4 mr-2" /> Authenticate
-          </button>
-          <p className="text-center text-[10px] text-slate-400 uppercase tracking-widest font-black">
-            Demo Creds: admin / password123
-          </p>
+            Authenticate
+          </Button>
         </form>
       </div>
     </div>

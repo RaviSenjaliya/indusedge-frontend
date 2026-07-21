@@ -9,22 +9,64 @@ import {
   Send,
   ShieldCheck,
   ArrowRight,
+  MapPin,
+  Building2,
 } from "lucide-react";
 import { db } from "../services/db";
-import { pushService } from "../services/pushService";
+import { SearchableSelect } from "./ui";
 
 interface Props {
   productName?: string;
   productId?: string;
 }
 
+// Indian states & union territories for the required State field.
+const INDIAN_STATES = [
+  "Andhra Pradesh",
+  "Arunachal Pradesh",
+  "Assam",
+  "Bihar",
+  "Chhattisgarh",
+  "Goa",
+  "Gujarat",
+  "Haryana",
+  "Himachal Pradesh",
+  "Jharkhand",
+  "Karnataka",
+  "Kerala",
+  "Madhya Pradesh",
+  "Maharashtra",
+  "Manipur",
+  "Meghalaya",
+  "Mizoram",
+  "Nagaland",
+  "Odisha",
+  "Punjab",
+  "Rajasthan",
+  "Sikkim",
+  "Tamil Nadu",
+  "Telangana",
+  "Tripura",
+  "Uttar Pradesh",
+  "Uttarakhand",
+  "West Bengal",
+  "Andaman & Nicobar Islands",
+  "Chandigarh",
+  "Dadra & Nagar Haveli and Daman & Diu",
+  "Delhi",
+  "Jammu & Kashmir",
+  "Ladakh",
+  "Lakshadweep",
+  "Puducherry",
+];
+
 export const InquiryForm: React.FC<Props> = ({ productName, productId }) => {
   const [formData, setFormData] = useState<InquiryFormData>({
     name: "",
     phone: "",
-    message: productName
-      ? `Requesting technical availability for unit: ${productName}.`
-      : "",
+    state: "",
+    city: "",
+    message: productName ? `Request for Quotation: ${productName}.` : "",
     productId,
     productName,
   });
@@ -39,15 +81,7 @@ export const InquiryForm: React.FC<Props> = ({ productName, productId }) => {
       await db.addInquiry(formData);
       setStatus("success");
 
-      // Trigger a confirmation push notification
-      pushService.sendLocalNotification(
-        "Inquiry Transmitted",
-        `Thank you ${formData.name}. Your request for ${
-          productName || "General Quote"
-        } is now in our priority queue.`
-      );
-
-      setFormData({ name: "", phone: "", message: "" });
+      setFormData({ name: "", phone: "", state: "", city: "", message: "" });
     } catch (err) {
       console.error(err);
       setStatus("idle");
@@ -56,7 +90,9 @@ export const InquiryForm: React.FC<Props> = ({ productName, productId }) => {
   };
 
   const handleChange = (
-    e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>
+    e: React.ChangeEvent<
+      HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement
+    >
   ) => {
     const { name, value } = e.target;
 
@@ -71,14 +107,14 @@ export const InquiryForm: React.FC<Props> = ({ productName, productId }) => {
 
   if (status === "success") {
     return (
-      <div className="bg-white p-12 rounded-[2.5rem] text-center animate-in zoom-in duration-500 border border-slate-100 transition-colors">
-        <div className="w-24 h-24 bg-green-50 rounded-full flex items-center justify-center mx-auto mb-8">
-          <ShieldCheck className="h-12 w-12 text-green-500" />
+      <div className="bg-white p-6 rounded-2xl text-center animate-in zoom-in duration-500 border border-slate-100 transition-colors">
+        <div className="w-12 h-12 bg-green-50 rounded-full flex items-center justify-center mx-auto mb-6">
+          <ShieldCheck className="h-6 w-6 text-green-500" />
         </div>
-        <h3 className="text-3xl font-black text-slate-900 mb-4 uppercase tracking-tight">
+        <h3 className="text-xl font-black text-slate-900 mb-3 uppercase tracking-tight">
           Inquiry Logged
         </h3>
-        <p className="text-slate-500 mb-10 font-medium max-w-sm mx-auto leading-relaxed">
+        <p className="text-slate-500 mb-6 font-medium max-w-sm mx-auto leading-relaxed">
           Your technical requirements have been synchronized with our Vadodara
           hub.
         </p>
@@ -94,10 +130,10 @@ export const InquiryForm: React.FC<Props> = ({ productName, productId }) => {
   }
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-6">
+    <form onSubmit={handleSubmit} className="space-y-4">
       {/* Context Badge for Specific Products */}
       {productName && (
-        <div className="bg-blue-50 border border-blue-100 px-6 py-4 rounded-2xl flex items-center justify-between mb-4">
+        <div className="bg-blue-50 border border-blue-100 px-4 py-3 rounded-xl flex items-center justify-between mb-4">
           <div className="flex items-center space-x-3">
             <div className="w-2 h-2 bg-blue-500 rounded-full animate-pulse"></div>
             <span className="text-[10px] font-black uppercase tracking-widest text-blue-600">
@@ -113,21 +149,21 @@ export const InquiryForm: React.FC<Props> = ({ productName, productId }) => {
         </div>
       )}
 
-      <div className="grid grid-cols-1 gap-6">
+      <div className="grid grid-cols-1 gap-4">
         <div className="relative group">
-          <User className="absolute left-5 top-1/2 -translate-y-1/2 h-5 w-5 text-slate-400 group-focus-within:text-blue-600 transition-colors" />
+          <User className="absolute left-4 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400 group-focus-within:text-blue-600 transition-colors" />
           <input
             required
             name="name"
             value={formData.name}
             onChange={handleChange}
             placeholder="Your Name *"
-            className="w-full pl-14 pr-6 py-4 bg-slate-50 border border-slate-200 rounded-2xl outline-none focus:ring-4 focus:ring-blue-500/10 focus:border-blue-600 transition-all font-bold text-slate-900 placeholder:text-slate-400 placeholder:font-medium"
+            className="w-full pl-11 pr-4 py-3.5 bg-slate-50 border border-slate-200 rounded-xl outline-none focus:ring-4 focus:ring-blue-500/10 focus:border-blue-600 transition-all font-bold text-slate-900 placeholder:text-slate-400 placeholder:font-medium"
           />
         </div>
 
         <div className="relative group">
-          <Phone className="absolute left-5 top-1/2 -translate-y-1/2 h-5 w-5 text-slate-400 group-focus-within:text-blue-600 transition-colors" />
+          <Phone className="absolute left-4 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400 group-focus-within:text-blue-600 transition-colors" />
           <input
             required
             type="tel"
@@ -135,28 +171,53 @@ export const InquiryForm: React.FC<Props> = ({ productName, productId }) => {
             value={formData.phone}
             onChange={handleChange}
             placeholder="Phone Number *"
-            className="w-full pl-14 pr-6 py-4 bg-slate-50 border border-slate-200 rounded-2xl outline-none focus:ring-4 focus:ring-blue-500/10 focus:border-blue-600 transition-all font-bold text-slate-900 placeholder:text-slate-400 placeholder:font-medium"
+            className="w-full pl-11 pr-4 py-3.5 bg-slate-50 border border-slate-200 rounded-xl outline-none focus:ring-4 focus:ring-blue-500/10 focus:border-blue-600 transition-all font-bold text-slate-900 placeholder:text-slate-400 placeholder:font-medium"
           />
         </div>
 
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <SearchableSelect
+            required
+            name="state"
+            options={INDIAN_STATES}
+            value={formData.state}
+            onChange={(state) => setFormData((prev) => ({ ...prev, state }))}
+            placeholder="Select State *"
+            searchPlaceholder="Search state…"
+            icon={MapPin}
+          />
+
+          <div className="relative group">
+            <Building2 className="absolute left-4 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400 group-focus-within:text-blue-600 transition-colors" />
+            <input
+              required
+              name="city"
+              value={formData.city}
+              onChange={handleChange}
+              placeholder="City *"
+              className="w-full pl-11 pr-4 py-3.5 bg-slate-50 border border-slate-200 rounded-xl outline-none focus:ring-4 focus:ring-blue-500/10 focus:border-blue-600 transition-all font-bold text-slate-900 placeholder:text-slate-400 placeholder:font-medium"
+            />
+          </div>
+        </div>
+
         <div className="relative group">
-          <MessageSquare className="absolute left-5 top-6 h-5 w-5 text-slate-400 group-focus-within:text-blue-600 transition-colors" />
+          <MessageSquare className="absolute left-4 top-4 h-4 w-4 text-slate-400 group-focus-within:text-blue-600 transition-colors" />
           <textarea
             name="message"
             rows={4}
             value={formData.message}
             onChange={handleChange}
             placeholder="Requirements (Optional)"
-            className="w-full pl-14 pr-6 py-6 bg-slate-50 border border-slate-200 rounded-[2rem] outline-none focus:ring-4 focus:ring-blue-500/10 focus:border-blue-600 transition-all font-medium text-slate-900 placeholder:text-slate-400 min-h-[120px]"
+            className="w-full pl-11 pr-4 py-3.5 bg-slate-50 border border-slate-200 rounded-xl outline-none focus:ring-4 focus:ring-blue-500/10 focus:border-blue-600 transition-all font-medium text-slate-900 placeholder:text-slate-400 min-h-[110px]"
           />
         </div>
       </div>
 
-      <div className="pt-4 flex flex-col items-center gap-6">
+      <div className="pt-4 flex flex-col items-center gap-4">
         <button
           type="submit"
           disabled={status === "loading"}
-          className="w-full bg-slate-900 hover:bg-blue-600 text-white font-black py-5 px-10 rounded-2xl flex items-center justify-center space-x-3 transition-all shadow-xl hover:shadow-blue-600/20 active:scale-95 disabled:opacity-50"
+          className="w-full bg-slate-900 hover:bg-blue-600 text-white font-black py-4 px-8 rounded-xl flex items-center justify-center space-x-3 transition-all shadow-xl hover:shadow-blue-600/20 active:scale-95 disabled:opacity-50"
         >
           {status === "loading" ? (
             <>

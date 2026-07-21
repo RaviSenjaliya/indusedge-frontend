@@ -1,0 +1,175 @@
+/* ==========================================================================
+   Palak Aluminium — global stylesheet
+   Provides the animation + scrollbar utilities the components rely on.
+   The Tailwind Play CDN does NOT ship `tailwindcss-animate`, so the
+   `animate-in / fade-in / zoom-in / slide-in-from-*` classes used across the
+   app would otherwise be no-ops. This file implements a compatible subset.
+   ========================================================================== */
+
+/* ---- Enter animation engine (tailwindcss-animate compatible) ------------- */
+@keyframes enter {
+  from {
+    opacity: var(--tw-enter-opacity, 1);
+    transform: translate3d(
+        var(--tw-enter-translate-x, 0),
+        var(--tw-enter-translate-y, 0),
+        0
+      )
+      scale3d(
+        var(--tw-enter-scale, 1),
+        var(--tw-enter-scale, 1),
+        var(--tw-enter-scale, 1)
+      );
+  }
+}
+
+.animate-in {
+  animation-name: enter;
+  animation-duration: 300ms;
+  animation-timing-function: cubic-bezier(0.16, 1, 0.3, 1);
+  animation-fill-mode: both;
+  --tw-enter-opacity: initial;
+  --tw-enter-scale: initial;
+  --tw-enter-translate-x: initial;
+  --tw-enter-translate-y: initial;
+}
+
+/* Modifiers set the starting values the keyframe reads from */
+.fade-in {
+  --tw-enter-opacity: 0;
+}
+.zoom-in-95 {
+  --tw-enter-scale: 0.95;
+}
+.zoom-in-90 {
+  --tw-enter-scale: 0.9;
+}
+.slide-in-from-top {
+  --tw-enter-translate-y: -0.5rem;
+}
+.slide-in-from-top-4 {
+  --tw-enter-translate-y: -1rem;
+}
+.slide-in-from-bottom-4 {
+  --tw-enter-translate-y: 1rem;
+}
+.slide-in-from-bottom-8 {
+  --tw-enter-translate-y: 2rem;
+}
+
+/* Map the duration utilities onto animation-duration (scoped to animated
+   elements so transition-only `duration-*` usages are untouched). */
+.animate-in.duration-200 {
+  animation-duration: 200ms;
+}
+.animate-in.duration-300 {
+  animation-duration: 300ms;
+}
+.animate-in.duration-500 {
+  animation-duration: 500ms;
+}
+.animate-in.duration-700 {
+  animation-duration: 700ms;
+}
+
+/* ---- Scrollbars ---------------------------------------------------------- */
+
+/* Slim, on-brand scrollbar for scrollable panels/modals */
+.custom-scrollbar {
+  scrollbar-width: thin;
+  scrollbar-color: #cbd5e1 transparent; /* slate-300 on transparent */
+}
+.custom-scrollbar::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+.custom-scrollbar::-webkit-scrollbar-track {
+  background: transparent;
+}
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  background-color: #cbd5e1; /* slate-300 */
+  border-radius: 9999px;
+  border: 2px solid transparent;
+  background-clip: content-box;
+}
+.custom-scrollbar::-webkit-scrollbar-thumb:hover {
+  background-color: #94a3b8; /* slate-400 */
+}
+
+/* Fully hidden scrollbar (used on horizontally scrolling tables) */
+.no-scrollbar {
+  -ms-overflow-style: none; /* IE / legacy Edge */
+  scrollbar-width: none; /* Firefox */
+}
+.no-scrollbar::-webkit-scrollbar {
+  display: none; /* Chrome / Safari */
+}
+
+/* Dark theme scrollbar */
+.dark .custom-scrollbar {
+  scrollbar-color: #334155 transparent; /* slate-700 */
+}
+.dark .custom-scrollbar::-webkit-scrollbar-thumb {
+  background-color: #334155; /* slate-700 */
+}
+.dark .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+  background-color: #475569; /* slate-600 */
+}
+
+/* ---- Skeleton shimmer ---------------------------------------------------- */
+@keyframes skeleton-shimmer {
+  100% {
+    transform: translateX(100%);
+  }
+}
+.skeleton-shimmer {
+  position: relative;
+  overflow: hidden;
+}
+.skeleton-shimmer::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  transform: translateX(-100%);
+  background: linear-gradient(
+    90deg,
+    transparent,
+    rgba(255, 255, 255, 0.55),
+    transparent
+  );
+  animation: skeleton-shimmer 1.6s infinite;
+}
+.dark .skeleton-shimmer::after {
+  background: linear-gradient(
+    90deg,
+    transparent,
+    rgba(255, 255, 255, 0.06),
+    transparent
+  );
+}
+
+/* ---- Toast entrance ------------------------------------------------------ */
+@keyframes toast-in {
+  from {
+    opacity: 0;
+    transform: translateX(1rem) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0) scale(1);
+  }
+}
+.toast-in {
+  animation: toast-in 0.28s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+/* ---- Accessibility: honor reduced-motion preference --------------------- */
+@media (prefers-reduced-motion: reduce) {
+  .animate-in,
+  .toast-in {
+    animation: none;
+  }
+  .skeleton-shimmer::after {
+    animation: none;
+  }
+}
