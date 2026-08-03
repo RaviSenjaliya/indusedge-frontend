@@ -3,7 +3,10 @@ services:
   - type: web
     name: indusedge-frontend
     runtime: static
-    buildCommand: npm ci && npm run build
+    # --include=dev is REQUIRED: Render sets NODE_ENV=production, which makes
+    # plain `npm ci` skip devDependencies — and vite lives there, so the build
+    # would fail with "vite: not found".
+    buildCommand: npm ci --include=dev && npm run build
     staticPublishPath: ./dist
     autoDeploy: true
     envVars:
