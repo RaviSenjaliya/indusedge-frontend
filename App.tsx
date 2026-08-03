@@ -35,7 +35,7 @@ import {
   Clock,
 } from "lucide-react";
 
-const Preloader: React.FC<{ status: string }> = ({ status }) => {
+const Preloader: React.FC = () => {
   return (
     <div className="fixed inset-0 bg-slate-900 z-[9999] flex flex-col items-center justify-center p-6 text-center">
       {/* Top progress bar */}
@@ -64,7 +64,7 @@ const Preloader: React.FC<{ status: string }> = ({ status }) => {
       <div className="flex items-center gap-2 text-slate-400">
         <Loader2 className="h-4 w-4 animate-spin text-blue-500" />
         <span className="text-[11px] font-black uppercase tracking-[0.2em]">
-          {status}
+          Loading...
         </span>
       </div>
 
@@ -248,36 +248,16 @@ const InquiryPage: React.FC = () => {
 
 const App: React.FC = () => {
   const [isBackendReady, setIsBackendReady] = useState(false);
-  const [status, setStatus] = useState("Initializing Connection...");
 
   useEffect(() => {
     const warmup = async () => {
       let ready = false;
-      let attempt = 0;
       while (!ready) {
-        attempt++;
-        setStatus(
-          attempt === 1
-            ? "Pinging Backend..."
-            : `Attempt ${attempt}: Backend Waking Up...`
-        );
-        try {
-          // fetch here directly to get data for status messages
-          const response = await fetch("/api/ping", {
-            signal: AbortSignal.timeout(5000),
-          });
-          if (response.ok) {
-            const data = await response.json();
-            if (data.database === "connected") {
-              ready = true;
-              setStatus("System Ready! Loading app...");
-            } else {
-              setStatus("API Online. Connecting to Database...");
-            }
-          }
-        } catch (e) {
-          ready = false;
-        }
+        // Must go through db.checkHealth() so the request uses the configured
+        // API base URL. A bare fetch("/api/ping") hits the frontend's own
+        // domain, where the SPA rewrite returns index.html and this loop
+        // never exits.
+        ready = await db.checkHealth();
         if (!ready) {
           await new Promise((resolve) => setTimeout(resolve, 3000));
         }
@@ -289,7 +269,7 @@ const App: React.FC = () => {
   }, []);
 
   if (!isBackendReady) {
-    return <Preloader status={status} />;
+    return <Preloader />;
   }
 
   return (

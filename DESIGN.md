@@ -50,7 +50,7 @@ index.html  →  index.tsx  →  <App />
   the root stylesheet. `<body>` sets the base theme: `bg-slate-50 text-slate-900`.
 - `App.tsx` runs a **backend warm-up loop** on mount: it polls `/api/ping` until the API
   responds with `{ database: "connected" }`, showing an animated `Preloader` (factory logo
-  + progress bar) with live status messages. Only once ready does it render the router.
+  + progress bar) with a plain "Loading..." label. Only once ready does it render the router.
   This gracefully covers cold-start latency on serverless/free-tier backends.
 
 ### 3.2 Routing
