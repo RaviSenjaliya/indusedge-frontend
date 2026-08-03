@@ -18,7 +18,40 @@ const STORAGE_KEYS = {
   IMAGES: "indusedge_images_v1",
   PROJECTS: "indusedge_projects_v1",
   TOKEN: "indusedge_token",
+  AUTH: "indusedge_admin_auth",
 };
+
+/** btoa() throws on non-ASCII, so encode as UTF-8 bytes first. */
+const toBase64 = (value: string): string => {
+  const bytes = new TextEncoder().encode(value);
+  let binary = "";
+  bytes.forEach((byte) => {
+    binary += String.fromCharCode(byte);
+  });
+  return btoa(binary);
+};
+
+const clearAuth = () => {
+  localStorage.removeItem(STORAGE_KEYS.TOKEN);
+  localStorage.removeItem(STORAGE_KEYS.AUTH);
+};
+
+/**
+ * The backend authenticates every privileged request on its own, so the admin
+ * credentials travel with each one. Empty for anonymous visitors.
+ */
+const authHeaders = (): Record<string, string> => {
+  const credentials = localStorage.getItem(STORAGE_KEYS.AUTH);
+  return credentials ? { Authorization: `Basic ${credentials}` } : {};
+};
+
+/** Thrown when the server rejects the admin credentials. */
+export class AuthError extends Error {
+  constructor(message = "Admin session rejected. Please log in again.") {
+    super(message);
+    this.name = "AuthError";
+  }
+}
 
 /**
  * Ensures the app has a baseline dataset even if the API is unreachable.
@@ -57,9 +90,20 @@ const fetchWithFallback = async <T>(
       ...options,
       headers: {
         "Content-Type": "application/json",
+        ...authHeaders(),
         ...options?.headers,
       },
     });
+
+    // Auth failures must never fall through to local data: silently serving a
+    // cached copy would make the admin panel look like the change was saved.
+    if (response.status === 401 || response.status === 403) {
+      clearAuth();
+      throw new AuthError();
+    }
+    if (response.status === 429) {
+      throw new AuthError("Too many failed attempts. Try again later.");
+    }
 
     if (!response.ok) {
       throw new Error(`API returned ${response.status}`);
@@ -74,6 +118,7 @@ const fetchWithFallback = async <T>(
 
     return data as T;
   } catch (err) {
+    if (err instanceof AuthError) throw err;
     console.warn(
       `[IndusEdge Resilience] API unreachable at ${endpoint}. Using Local Node.`
     );
@@ -295,8 +340,16 @@ export const db = {
 
     const response = await fetch(`${API_BASE_URL}/upload`, {
       method: "POST",
+      // No Content-Type here on purpose — the browser must set the multipart
+      // boundary itself.
+      headers: authHeaders(),
       body: formData,
     });
+
+    if (response.status === 401 || response.status === 403) {
+      clearAuth();
+      throw new AuthError();
+    }
 
     if (!response.ok) {
       const err = await response.json();
@@ -394,21 +447,24 @@ export const db = {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ user, pass }),
       });
+      if (!response.ok) return false;
+
       const res = await response.json();
-      if (res.success && res.token) {
-        localStorage.setItem(STORAGE_KEYS.TOKEN, res.token);
-        return true;
-      }
-      return false;
+      if (!res.success || !res.token) return false;
+
+      localStorage.setItem(STORAGE_KEYS.TOKEN, res.token);
+      // Stored because the backend re-checks credentials on every privileged
+      // request. There is no offline fallback: without a reachable API there
+      // is nothing to authenticate against.
+      localStorage.setItem(STORAGE_KEYS.AUTH, toBase64(`${user}:${pass}`));
+      return true;
     } catch {
-      if (user === "admin" && pass === "password123") {
-        localStorage.setItem(STORAGE_KEYS.TOKEN, "demo-offline-session");
-        return true;
-      }
       return false;
     }
   },
 
-  logout: () => localStorage.removeItem(STORAGE_KEYS.TOKEN),
-  isLoggedIn: () => !!localStorage.getItem(STORAGE_KEYS.TOKEN),
+  logout: clearAuth,
+  isLoggedIn: () =>
+    !!localStorage.getItem(STORAGE_KEYS.TOKEN) &&
+    !!localStorage.getItem(STORAGE_KEYS.AUTH),
 };
