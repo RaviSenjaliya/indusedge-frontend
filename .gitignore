@@ -1,7 +1,6 @@
 node_modules
 dist
 .vscode
-.vercel
 
 # Secrets / local overrides — never commit. Template (.env.example) is tracked.
 .env
@@ -9,7 +8,7 @@ dist
 .env.*.local
 !.env.example
 
-# Lockfile IS committed: Vercel runs `npm ci`, which requires it.
+# Lockfile IS committed: Render runs `npm ci`, which requires it.
 
 *.log
 npm-debug.log*

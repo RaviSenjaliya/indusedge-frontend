@@ -1,0 +1,30 @@
+# Render Blueprint: static site. Dashboard -> New -> Blueprint -> this repo.
+services:
+  - type: web
+    name: indusedge-frontend
+    runtime: static
+    buildCommand: npm ci && npm run build
+    staticPublishPath: ./dist
+    autoDeploy: true
+    envVars:
+      - key: NODE_VERSION
+        value: 20
+      # Baked into the bundle at BUILD time. Changing it requires a redeploy
+      # (Manual Deploy -> Clear build cache & deploy), not just a restart.
+      # Value: https://<your-backend-service>.onrender.com/api
+      - key: VITE_API_BASE_URL
+        sync: false
+    routes:
+      # SPA fallback: react-router owns every path. Real files in dist/
+      # are matched first, so this only catches client-side routes.
+      - type: rewrite
+        source: /*
+        destination: /index.html
+    headers:
+      # Vite fingerprints everything under /assets, safe to cache forever.
+      - path: /assets/*
+        name: Cache-Control
+        value: public, max-age=31536000, immutable
+      - path: /index.html
+        name: Cache-Control
+        value: no-cache
