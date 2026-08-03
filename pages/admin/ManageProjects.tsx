@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { db } from "../../services/db";
+import { db, describeError } from "../../services/db";
 import { Project, Category } from "../../types";
 import {
   Plus,
@@ -133,17 +133,15 @@ export const ManageProjects: React.FC = () => {
       isActive: editing.isActive ?? true,
     };
 
-    const result = await db.saveProject(newProj);
-    if (result) {
+    try {
+      await db.saveProject(newProj);
       const updated = await db.getProjects();
       setProjects(updated);
       setEditing(null);
       toast.success("Project saved", `"${newProj.title}" is up to date.`);
-    } else {
-      toast.error(
-        "Failed to synchronize",
-        "Could not save to the backend. Check console for details."
-      );
+    } catch (err) {
+      const { title, detail } = describeError(err);
+      toast.error(title, detail);
     }
     setIsSaving(false);
   };
@@ -163,7 +161,8 @@ export const ManageProjects: React.FC = () => {
       setProjects(updated);
       toast.success("Project deleted", `"${p.title}" was removed.`);
     } catch (err) {
-      toast.error("Failed to delete project", "Please try again.");
+      const { title, detail } = describeError(err);
+      toast.error(title, detail);
     }
     setDeletingId(null);
   };

@@ -54,6 +54,72 @@ export class AuthError extends Error {
 }
 
 /**
+ * Thrown when the API answered with an error. `fields` maps a field name to a
+ * human-readable message, so a form can show it next to the offending input.
+ */
+export class ApiError extends Error {
+  status: number;
+  fields: Record<string, string>;
+
+  constructor(
+    status: number,
+    message: string,
+    fields: Record<string, string> = {}
+  ) {
+    super(message);
+    this.name = "ApiError";
+    this.status = status;
+    this.fields = fields;
+  }
+
+  /** First field message, useful for a single-line form error. */
+  get firstFieldMessage(): string | undefined {
+    return Object.values(this.fields)[0];
+  }
+}
+
+/**
+ * Turns any thrown error into a title/detail pair suitable for a toast.
+ * Field-level validation messages are preferred because they tell the user
+ * exactly what to change.
+ */
+export const describeError = (
+  err: unknown
+): { title: string; detail: string } => {
+  if (err instanceof AuthError) {
+    return { title: "Session expired", detail: err.message };
+  }
+  if (err instanceof ApiError) {
+    const fieldMessages = Object.values(err.fields);
+    if (fieldMessages.length > 0) {
+      return {
+        title: "Please check the form",
+        detail: fieldMessages.join(" "),
+      };
+    }
+    return { title: "Request rejected", detail: err.message };
+  }
+  return {
+    title: "Something went wrong",
+    detail: "Could not reach the server. Please try again.",
+  };
+};
+
+const readError = async (response: Response): Promise<ApiError> => {
+  let payload: any = null;
+  try {
+    payload = await response.json();
+  } catch {
+    // Non-JSON error body (proxy HTML, empty response, …)
+  }
+  return new ApiError(
+    response.status,
+    payload?.error || `Request failed (${response.status})`,
+    payload?.fields || {}
+  );
+};
+
+/**
  * Ensures the app has a baseline dataset even if the API is unreachable.
  */
 const initLocalStore = () => {
@@ -85,8 +151,12 @@ const fetchWithFallback = async <T>(
   localGetter: () => T,
   localSetter: (data: T) => void
 ): Promise<T> => {
+  const method = (options.method || "GET").toUpperCase();
+  const isRead = method === "GET";
+  let response: Response;
+
   try {
-    const response = await fetch(`${API_BASE_URL}${endpoint}`, {
+    response = await fetch(`${API_BASE_URL}${endpoint}`, {
       ...options,
       headers: {
         "Content-Type": "application/json",
@@ -94,7 +164,16 @@ const fetchWithFallback = async <T>(
         ...options?.headers,
       },
     });
+  } catch {
+    // The request never reached the server (offline, DNS, timeout). This is
+    // the only case the local fallback is meant for.
+    console.warn(
+      `[IndusEdge Resilience] API unreachable at ${endpoint}. Using Local Node.`
+    );
+    return localGetter();
+  }
 
+  if (!response.ok) {
     // Auth failures must never fall through to local data: silently serving a
     // cached copy would make the admin panel look like the change was saved.
     if (response.status === 401 || response.status === 403) {
@@ -105,25 +184,29 @@ const fetchWithFallback = async <T>(
       throw new AuthError("Too many failed attempts. Try again later.");
     }
 
-    if (!response.ok) {
-      throw new Error(`API returned ${response.status}`);
+    const error = await readError(response);
+
+    // Reads stay resilient when the server itself is broken, so the storefront
+    // still renders. Writes and rejected input must surface — a validation
+    // error silently "succeeding" is how bad data goes unnoticed.
+    if (isRead && response.status >= 500) {
+      console.warn(
+        `[IndusEdge Resilience] API error ${response.status} at ${endpoint}. Using Local Node.`
+      );
+      return localGetter();
     }
 
-    const data = await response.json();
-
-    // On success, sync back to local storage
-    if (options.method === "GET" && Array.isArray(data)) {
-      localSetter(data as T);
-    }
-
-    return data as T;
-  } catch (err) {
-    if (err instanceof AuthError) throw err;
-    console.warn(
-      `[IndusEdge Resilience] API unreachable at ${endpoint}. Using Local Node.`
-    );
-    return localGetter();
+    throw error;
   }
+
+  const data = await response.json();
+
+  // On success, sync back to local storage
+  if (isRead && Array.isArray(data)) {
+    localSetter(data as T);
+  }
+
+  return data as T;
 };
 
 const getLocalProducts = (): Product[] =>
@@ -352,8 +435,8 @@ export const db = {
     }
 
     if (!response.ok) {
-      const err = await response.json();
-      throw new Error(err.error || "Upload failed");
+      // Carries field messages such as "Image must be 5 MB or smaller".
+      throw await readError(response);
     }
 
     const data = await response.json();

@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo, useRef } from "react";
-import { db } from "../../services/db";
+import { db, describeError } from "../../services/db";
 import { Inquiry, InquiryStatus } from "../../types";
 import * as XLSX from "xlsx";
 import {
@@ -75,14 +75,19 @@ export const ManageInquiries: React.FC = () => {
   };
 
   const updateStatus = async (id: string, status: InquiryStatus) => {
-    await db.updateInquiryStatus(id, status);
-    const updated = await db.getInquiries();
-    setInquiries(updated);
-    if (selected?.id === id) {
-      const s = updated.find((x) => x.id === id);
-      if (s) setSelected(s);
+    try {
+      await db.updateInquiryStatus(id, status);
+      const updated = await db.getInquiries();
+      setInquiries(updated);
+      if (selected?.id === id) {
+        const s = updated.find((x) => x.id === id);
+        if (s) setSelected(s);
+      }
+      toast.info("Status updated");
+    } catch (err) {
+      const { title, detail } = describeError(err);
+      toast.error(title, detail);
     }
-    toast.info("Status updated");
   };
 
   const handleDelete = async (id: string) => {
@@ -99,11 +104,16 @@ export const ManageInquiries: React.FC = () => {
       confirmOpenRef.current = false;
     }
     if (!ok) return;
-    await db.deleteInquiry(id);
-    const updated = await db.getInquiries();
-    setInquiries(updated);
-    if (selected?.id === id) setSelected(null);
-    toast.success("Inquiry deleted");
+    try {
+      await db.deleteInquiry(id);
+      const updated = await db.getInquiries();
+      setInquiries(updated);
+      if (selected?.id === id) setSelected(null);
+      toast.success("Inquiry deleted");
+    } catch (err) {
+      const { title, detail } = describeError(err);
+      toast.error(title, detail);
+    }
   };
 
   const downloadAsExcel = () => {

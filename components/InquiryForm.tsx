@@ -11,14 +11,42 @@ import {
   ArrowRight,
   MapPin,
   Building2,
+  AlertCircle,
 } from "lucide-react";
-import { db } from "../services/db";
+import { db, ApiError, AuthError } from "../services/db";
+import {
+  validateInquiryForm,
+  hasErrors,
+  API_TO_INQUIRY_FIELD,
+  FieldErrors,
+} from "../services/validation";
 import { SearchableSelect } from "./ui";
 
 interface Props {
   productName?: string;
   productId?: string;
 }
+
+const INPUT_BASE =
+  "w-full pl-11 pr-4 py-3.5 border rounded-xl outline-none focus:ring-4 transition-all text-slate-900 placeholder:text-slate-400";
+const INPUT_OK =
+  "bg-slate-50 border-slate-200 focus:ring-blue-500/10 focus:border-blue-600";
+const INPUT_ERROR =
+  "bg-red-50 border-red-300 focus:ring-red-500/10 focus:border-red-500";
+
+const inputClass = (invalid?: boolean, weight = "font-bold placeholder:font-medium") =>
+  `${INPUT_BASE} ${weight} ${invalid ? INPUT_ERROR : INPUT_OK}`;
+
+const FieldError: React.FC<{ message?: string }> = ({ message }) =>
+  message ? (
+    <p
+      role="alert"
+      className="mt-1.5 flex items-start gap-1.5 text-[11px] font-bold text-red-600"
+    >
+      <AlertCircle className="h-3.5 w-3.5 shrink-0 mt-px" />
+      <span>{message}</span>
+    </p>
+  ) : null;
 
 // Indian states & union territories for the required State field.
 const INDIAN_STATES = [
@@ -72,21 +100,62 @@ export const InquiryForm: React.FC<Props> = ({ productName, productId }) => {
   });
 
   const [status, setStatus] = useState<"idle" | "loading" | "success">("idle");
+  const [errors, setErrors] = useState<FieldErrors>({});
+  const [formError, setFormError] = useState<string>("");
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+
+    // Validate locally first so obvious mistakes never cost a round trip.
+    const localErrors = validateInquiryForm(formData);
+    if (hasErrors(localErrors)) {
+      setErrors(localErrors);
+      setFormError("Please correct the highlighted fields.");
+      return;
+    }
+
+    setErrors({});
+    setFormError("");
     setStatus("loading");
 
     try {
       await db.addInquiry(formData);
       setStatus("success");
-
       setFormData({ name: "", phone: "", state: "", city: "", message: "" });
     } catch (err) {
-      console.error(err);
       setStatus("idle");
-      alert("Error submitting inquiry. Please try again later.");
+
+      // The API reports per-field problems; map them onto the inputs.
+      if (err instanceof ApiError) {
+        const mapped: FieldErrors = {};
+        for (const [apiField, message] of Object.entries(err.fields)) {
+          mapped[API_TO_INQUIRY_FIELD[apiField] || apiField] = message;
+        }
+        setErrors(mapped);
+        setFormError(
+          hasErrors(mapped) ? "Please correct the highlighted fields." : err.message
+        );
+        return;
+      }
+
+      if (err instanceof AuthError) {
+        setFormError(err.message);
+        return;
+      }
+
+      console.error(err);
+      setFormError("Could not submit your inquiry. Please try again.");
     }
+  };
+
+  /** Clears a field's error as soon as the user edits it. */
+  const clearFieldError = (field: string) => {
+    setErrors((prev) => {
+      if (!prev[field]) return prev;
+      const next = { ...prev };
+      delete next[field];
+      return next;
+    });
   };
 
   const handleChange = (
@@ -95,6 +164,7 @@ export const InquiryForm: React.FC<Props> = ({ productName, productId }) => {
     >
   ) => {
     const { name, value } = e.target;
+    clearFieldError(name);
 
     if (name === "phone") {
       // Only allow numeric characters
@@ -130,7 +200,9 @@ export const InquiryForm: React.FC<Props> = ({ productName, productId }) => {
   }
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-4">
+    // noValidate: our own messages are shown instead of the browser's generic
+    // tooltips, and they match what the API would say.
+    <form onSubmit={handleSubmit} noValidate className="space-y-4">
       {/* Context Badge for Specific Products */}
       {productName && (
         <div className="bg-blue-50 border border-blue-100 px-4 py-3 rounded-xl flex items-center justify-between mb-4">
@@ -149,67 +221,101 @@ export const InquiryForm: React.FC<Props> = ({ productName, productId }) => {
         </div>
       )}
 
+      {formError && (
+        <div
+          role="alert"
+          className="flex items-start gap-2.5 bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-xl"
+        >
+          <AlertCircle className="h-4 w-4 shrink-0 mt-0.5" />
+          <span className="text-xs font-bold">{formError}</span>
+        </div>
+      )}
+
       <div className="grid grid-cols-1 gap-4">
-        <div className="relative group">
-          <User className="absolute left-4 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400 group-focus-within:text-blue-600 transition-colors" />
-          <input
-            required
-            name="name"
-            value={formData.name}
-            onChange={handleChange}
-            placeholder="Your Name *"
-            className="w-full pl-11 pr-4 py-3.5 bg-slate-50 border border-slate-200 rounded-xl outline-none focus:ring-4 focus:ring-blue-500/10 focus:border-blue-600 transition-all font-bold text-slate-900 placeholder:text-slate-400 placeholder:font-medium"
-          />
+        <div>
+          <div className="relative group">
+            <User className="absolute left-4 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400 group-focus-within:text-blue-600 transition-colors" />
+            <input
+              required
+              name="name"
+              value={formData.name}
+              onChange={handleChange}
+              aria-invalid={!!errors.name}
+              placeholder="Your Name *"
+              className={inputClass(!!errors.name)}
+            />
+          </div>
+          <FieldError message={errors.name} />
         </div>
 
-        <div className="relative group">
-          <Phone className="absolute left-4 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400 group-focus-within:text-blue-600 transition-colors" />
-          <input
-            required
-            type="tel"
-            name="phone"
-            value={formData.phone}
-            onChange={handleChange}
-            placeholder="Phone Number *"
-            className="w-full pl-11 pr-4 py-3.5 bg-slate-50 border border-slate-200 rounded-xl outline-none focus:ring-4 focus:ring-blue-500/10 focus:border-blue-600 transition-all font-bold text-slate-900 placeholder:text-slate-400 placeholder:font-medium"
-          />
+        <div>
+          <div className="relative group">
+            <Phone className="absolute left-4 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400 group-focus-within:text-blue-600 transition-colors" />
+            <input
+              required
+              type="tel"
+              inputMode="numeric"
+              name="phone"
+              value={formData.phone}
+              onChange={handleChange}
+              aria-invalid={!!errors.phone}
+              placeholder="Phone Number *"
+              className={inputClass(!!errors.phone)}
+            />
+          </div>
+          <FieldError message={errors.phone} />
         </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <SearchableSelect
-            required
-            name="state"
-            options={INDIAN_STATES}
-            value={formData.state}
-            onChange={(state) => setFormData((prev) => ({ ...prev, state }))}
-            placeholder="Select State *"
-            searchPlaceholder="Search state…"
-            icon={MapPin}
-          />
-
-          <div className="relative group">
-            <Building2 className="absolute left-4 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400 group-focus-within:text-blue-600 transition-colors" />
-            <input
+          <div>
+            <SearchableSelect
               required
-              name="city"
-              value={formData.city}
-              onChange={handleChange}
-              placeholder="City *"
-              className="w-full pl-11 pr-4 py-3.5 bg-slate-50 border border-slate-200 rounded-xl outline-none focus:ring-4 focus:ring-blue-500/10 focus:border-blue-600 transition-all font-bold text-slate-900 placeholder:text-slate-400 placeholder:font-medium"
+              name="state"
+              options={INDIAN_STATES}
+              value={formData.state}
+              onChange={(state) => {
+                clearFieldError("state");
+                setFormData((prev) => ({ ...prev, state }));
+              }}
+              placeholder="Select State *"
+              searchPlaceholder="Search state…"
+              icon={MapPin}
             />
+            <FieldError message={errors.state} />
+          </div>
+
+          <div>
+            <div className="relative group">
+              <Building2 className="absolute left-4 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400 group-focus-within:text-blue-600 transition-colors" />
+              <input
+                required
+                name="city"
+                value={formData.city}
+                onChange={handleChange}
+                aria-invalid={!!errors.city}
+                placeholder="City *"
+                className={inputClass(!!errors.city)}
+              />
+            </div>
+            <FieldError message={errors.city} />
           </div>
         </div>
 
-        <div className="relative group">
-          <MessageSquare className="absolute left-4 top-4 h-4 w-4 text-slate-400 group-focus-within:text-blue-600 transition-colors" />
-          <textarea
-            name="message"
-            rows={4}
-            value={formData.message}
-            onChange={handleChange}
-            placeholder="Requirements (Optional)"
-            className="w-full pl-11 pr-4 py-3.5 bg-slate-50 border border-slate-200 rounded-xl outline-none focus:ring-4 focus:ring-blue-500/10 focus:border-blue-600 transition-all font-medium text-slate-900 placeholder:text-slate-400 min-h-[110px]"
-          />
+        <div>
+          <div className="relative group">
+            <MessageSquare className="absolute left-4 top-4 h-4 w-4 text-slate-400 group-focus-within:text-blue-600 transition-colors" />
+            <textarea
+              name="message"
+              rows={4}
+              value={formData.message}
+              onChange={handleChange}
+              aria-invalid={!!errors.message}
+              maxLength={2000}
+              placeholder="Requirements (Optional)"
+              className={`${inputClass(!!errors.message, "font-medium")} min-h-[110px]`}
+            />
+          </div>
+          <FieldError message={errors.message} />
         </div>
       </div>
 

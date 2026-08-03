@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from "react";
-import { db } from "../../services/db";
+import { db, describeError } from "../../services/db";
 import { ImageAsset, Category } from "../../types";
 import {
   Upload,
@@ -131,7 +131,8 @@ export const ImageUpload: React.FC = () => {
       setSelectedCategory("");
       toast.success("Image uploaded");
     } catch (err: any) {
-      toast.error(err.message || "Upload failed");
+      const { title, detail } = describeError(err);
+      toast.error(title, detail);
     } finally {
       setLoading(false);
     }
@@ -150,7 +151,8 @@ export const ImageUpload: React.FC = () => {
       setImages((prev) => prev.filter((img) => img.publicId !== id));
       toast.success("Image deleted");
     } catch (err) {
-      toast.error("Failed to delete image");
+      const { title, detail } = describeError(err);
+      toast.error(title, detail);
     }
   };
 
@@ -165,7 +167,8 @@ export const ImageUpload: React.FC = () => {
       setEditingImage(null);
       toast.success("Category updated");
     } catch (err) {
-      toast.error("Failed to update category");
+      const { title, detail } = describeError(err);
+      toast.error(title, detail);
     }
   };
 

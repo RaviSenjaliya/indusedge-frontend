@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { db } from "../../services/db";
+import { db, describeError } from "../../services/db";
 import { Category, Product } from "../../types";
 import {
   Plus,
@@ -122,20 +122,30 @@ export const ManageSections: React.FC = () => {
       icon: editing.icon || "Activity",
     };
 
-    await db.saveCategory(newSec);
-    const updated = await db.getCategories();
-    setSections(updated);
-    setEditing(null);
-    toast.success("Category saved");
+    try {
+      await db.saveCategory(newSec);
+      const updated = await db.getCategories();
+      setSections(updated);
+      setEditing(null);
+      toast.success("Category saved");
+    } catch (err) {
+      const { title, detail } = describeError(err);
+      toast.error(title, detail);
+    }
   };
 
   const toggleStatus = async (id: string) => {
     const s = sections.find((x) => x.id === id);
     if (!s) return;
-    await db.saveCategory({ ...s, isActive: !s.isActive });
-    const updated = await db.getCategories();
-    setSections(updated);
-    toast.info(s.isActive ? "Category hidden" : "Category activated");
+    try {
+      await db.saveCategory({ ...s, isActive: !s.isActive });
+      const updated = await db.getCategories();
+      setSections(updated);
+      toast.info(s.isActive ? "Category hidden" : "Category activated");
+    } catch (err) {
+      const { title, detail } = describeError(err);
+      toast.error(title, detail);
+    }
   };
 
   /**
@@ -172,14 +182,19 @@ export const ManageSections: React.FC = () => {
       message: "This category has no products linked and will be removed.",
     });
     if (!ok) return;
-    await db.deleteCategory(id);
-    const [updatedCats, updatedProds] = await Promise.all([
-      db.getCategories(),
-      db.getProducts(),
-    ]);
-    setSections(updatedCats);
-    setProducts(updatedProds);
-    toast.success("Category deleted");
+    try {
+      await db.deleteCategory(id);
+      const [updatedCats, updatedProds] = await Promise.all([
+        db.getCategories(),
+        db.getProducts(),
+      ]);
+      setSections(updatedCats);
+      setProducts(updatedProds);
+      toast.success("Category deleted");
+    } catch (err) {
+      const { title, detail } = describeError(err);
+      toast.error(title, detail);
+    }
   };
 
   const columns: Column<Category>[] = [

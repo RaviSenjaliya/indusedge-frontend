@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { db } from "../../services/db";
+import { db, describeError } from "../../services/db";
 import { Product, Category } from "../../types";
 import {
   Plus,
@@ -166,17 +166,15 @@ export const ManageProducts: React.FC = () => {
       isActive: editing.isActive ?? true,
     };
 
-    const result = await db.saveProduct(newProd);
-    if (result) {
+    try {
+      await db.saveProduct(newProd);
       const updated = await db.getProducts();
       setProducts(updated);
       setEditing(null);
       toast.success("Product saved", `"${newProd.name}" is up to date.`);
-    } else {
-      toast.error(
-        "Failed to synchronize",
-        "Could not save to the backend. Check console for details."
-      );
+    } catch (err) {
+      const { title, detail } = describeError(err);
+      toast.error(title, detail);
     }
     setIsSaving(false);
   };
@@ -196,7 +194,8 @@ export const ManageProducts: React.FC = () => {
       setProducts(updated);
       toast.success("Product deleted", `"${p.name}" was removed.`);
     } catch (err) {
-      toast.error("Failed to delete product", "Please try again.");
+      const { title, detail } = describeError(err);
+      toast.error(title, detail);
     }
     setDeletingId(null);
   };
