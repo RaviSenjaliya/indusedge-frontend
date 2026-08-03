@@ -2,7 +2,15 @@ import { Product, Category, Inquiry, InquiryStatus, Project } from "../types";
 import { PRODUCTS, CATEGORIES } from "../constants";
 import { PROJECTS } from "../data/projects";
 
-const API_BASE_URL = "/api";
+/**
+ * In production the API lives on its own host, so VITE_API_BASE_URL must be
+ * set at build time (e.g. https://indusedge-backend.onrender.com/api).
+ * Locally it stays empty and requests go through the Vite dev proxy.
+ */
+const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL || "/api").replace(
+  /\/$/,
+  ""
+);
 const STORAGE_KEYS = {
   PRODUCTS: "indusedge_products_v1",
   CATEGORIES: "indusedge_categories_v1",
