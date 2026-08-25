@@ -287,10 +287,12 @@ export const Home: React.FC = () => {
                   <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-blue-500/70 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500 z-10"></div>
 
                   <div className="flex flex-col sm:flex-row h-full">
-                    <div className="w-full sm:w-[45%] relative overflow-hidden bg-slate-100">
+                    {/* Fixed media box: the image is absolutely positioned so its
+                        intrinsic size can never stretch the card. */}
+                    <div className="w-full sm:w-[45%] shrink-0 relative overflow-hidden bg-slate-100 h-52 sm:h-auto sm:min-h-[240px]">
                       <Img
                         src={p.images[0]}
-                        className="w-full h-full min-h-[180px] object-cover group-hover:scale-[1.06] transition-transform duration-700 ease-out"
+                        className="absolute inset-0 w-full h-full object-cover group-hover:scale-[1.06] transition-transform duration-700 ease-out"
                         alt={p.name}
                       />
                       {/* Scrim + sheen sweep */}
